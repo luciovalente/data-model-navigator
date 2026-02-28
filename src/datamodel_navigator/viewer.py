@@ -133,8 +133,31 @@ HTML_TEMPLATE = """<!doctype html>
     #fallback {
       display: none;
       padding: 16px;
-      color: #b91c1c;
+      color: #92400e;
+      background: #fffbeb;
+      border-bottom: 1px solid #fcd34d;
       font-weight: 600;
+    }
+    #fallback-content {
+      display: none;
+      padding: 16px;
+      overflow: auto;
+      height: 100%;
+      background: #fff;
+    }
+    .fallback-entity {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 10px;
+    }
+    .fallback-entity-title {
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .fallback-rel {
+      font-size: 13px;
+      color: var(--muted);
     }
   </style>
 </head>
@@ -155,8 +178,9 @@ HTML_TEMPLATE = """<!doctype html>
   </aside>
 
   <main style='position:relative;'>
-    <div id='fallback'>Impossibile caricare la libreria del viewer (vis-network).</div>
+    <div id='fallback'>Modalità compatibilità: libreria vis-network non disponibile. Mostro entità e relazioni in formato elenco.</div>
     <div id='network'></div>
+    <div id='fallback-content'></div>
   </main>
 
   <aside id='right'>
@@ -247,10 +271,44 @@ HTML_TEMPLATE = """<!doctype html>
 
     const networkContainer = document.getElementById('network');
     const fallback = document.getElementById('fallback');
+    const fallbackContent = document.getElementById('fallback-content');
+
+    function renderFallbackContent() {
+      const relationshipsByEntity = new Map(model.entities.map(entity => [entity.id, []]));
+      normalizedRelationships.forEach(rel => {
+        if (relationshipsByEntity.has(rel.fromId)) {
+          relationshipsByEntity.get(rel.fromId).push(rel);
+        }
+        if (relationshipsByEntity.has(rel.toId) && rel.toId !== rel.fromId) {
+          relationshipsByEntity.get(rel.toId).push(rel);
+        }
+      });
+
+      fallbackContent.innerHTML = model.entities.map(entity => {
+        const rels = relationshipsByEntity.get(entity.id) || [];
+        const relMarkup = rels.length === 0
+          ? "<div class='fallback-rel'>Nessuna relazione.</div>"
+          : rels.map(rel => {
+            const fromEntity = entitiesById.get(rel.fromId);
+            const toEntity = entitiesById.get(rel.toId);
+            return `<div class='fallback-rel'>${fromEntity.name}.${rel.from_field || '?'} → ${toEntity.name}.${rel.to_field || '?'}</div>`;
+          }).join('');
+
+        return `
+          <div class='fallback-entity'>
+            <div class='fallback-entity-title'>${entity.name}</div>
+            <div class='meta'>${entity.source_system} • ${entity.source_type}</div>
+            ${relMarkup}
+          </div>
+        `;
+      }).join('');
+    }
 
     if (!window.vis || !window.vis.Network) {
       fallback.style.display = 'block';
       networkContainer.style.display = 'none';
+      fallbackContent.style.display = 'block';
+      renderFallbackContent();
     } else {
       const nodes = new vis.DataSet(
         model.entities.map((entity, idx) => ({
