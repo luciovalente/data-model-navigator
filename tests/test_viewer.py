@@ -77,3 +77,11 @@ def test_viewer_uses_escaped_newline_in_csv_join() -> None:
     model = DataModel(entities=[])
     html = build_viewer_html(model)
     assert "].join('\\n');" in html
+
+
+def test_viewer_uses_force_layout_for_graph_centering() -> None:
+    model = DataModel(entities=[])
+    html = build_viewer_html(model)
+    assert "solver: 'forceAtlas2Based'" in html
+    assert "network.once('stabilizationIterationsDone'" in html
+    assert "network.setOptions({ physics: false });" in html
