@@ -59,3 +59,21 @@ dmn --phase viewer
 python -m http.server 8000
 # apri http://localhost:8000/output/viewer.html
 ```
+
+## Risoluzione problemi
+
+Se `dmn` risponde `command not found`, hai due opzioni:
+
+```bash
+# opzione A: installazione comando in ambiente virtuale
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+dmn --menu
+
+# opzione B: launcher locale senza installazione
+./dmn --menu
+
+# opzione C: entrypoint modulo Python
+PYTHONPATH=src python -m datamodel_navigator --menu
+```
