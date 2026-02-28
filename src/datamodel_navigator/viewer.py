@@ -151,9 +151,8 @@ HTML_TEMPLATE = """<!doctype html>
 
     #connector-layer {
       position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
+      top: 0;
+      left: 0;
       z-index: 1;
       pointer-events: auto;
       overflow: visible;
@@ -591,6 +590,8 @@ HTML_TEMPLATE = """<!doctype html>
 
       const width = Math.max(1, maxX - minX);
       const height = Math.max(1, maxY - minY);
+      connectorLayer.style.left = `${minX}px`;
+      connectorLayer.style.top = `${minY}px`;
       connectorLayer.setAttribute('width', `${width}`);
       connectorLayer.setAttribute('height', `${height}`);
       connectorLayer.setAttribute('viewBox', `${minX} ${minY} ${width} ${height}`);
