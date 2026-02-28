@@ -149,8 +149,24 @@ HTML_TEMPLATE = """<!doctype html>
       inset: 0;
       width: 100%;
       height: 100%;
-      pointer-events: none;
       z-index: 1;
+      pointer-events: auto;
+    }
+
+    .connector-path {
+      pointer-events: stroke;
+      cursor: pointer;
+      transition: stroke 120ms ease, stroke-width 120ms ease;
+    }
+
+    .connector-path:hover {
+      stroke: #4338ca;
+      stroke-width: 3;
+    }
+
+    .connector-path.active {
+      stroke: #1d4ed8;
+      stroke-width: 3;
     }
 
     .board-entity {
@@ -330,6 +346,7 @@ HTML_TEMPLATE = """<!doctype html>
     const entitiesById = new Map(model.entities.map(entity => [entity.id, entity]));
     const entitiesByName = new Map(model.entities.map(entity => [entity.name, entity]));
     const selectedEntityIds = new Set();
+    let activeRelationshipId = null;
 
     function getEntityId(entityRef) {
       if (entitiesById.has(entityRef)) {
@@ -410,7 +427,7 @@ HTML_TEMPLATE = """<!doctype html>
     function createEntityNode(entity, idx) {
       const card = document.createElement('article');
       card.className = 'board-entity';
-      const sourceType = (entity.source_type || '').toLowerCase();
+      const sourceType = `${entity.source_type || ''} ${entity.source_system || ''}`.toLowerCase();
       if (sourceType.includes('postgres')) {
         card.classList.add('is-postgres');
       } else if (sourceType.includes('mongo')) {
@@ -441,6 +458,7 @@ HTML_TEMPLATE = """<!doctype html>
       entityElements.set(entity.id, card);
 
       card.addEventListener('click', () => {
+        activeRelationshipId = null;
         if (selectedEntityIds.has(entity.id)) {
           selectedEntityIds.delete(entity.id);
         } else {
@@ -476,8 +494,8 @@ HTML_TEMPLATE = """<!doctype html>
         const boardRect = board.getBoundingClientRect();
         const localX = (event.clientX - boardRect.left - translateX) / scale;
         const localY = (event.clientY - boardRect.top - translateY) / scale;
-        const x = Math.max(0, Math.min(localX - offsetX, board.clientWidth - card.offsetWidth));
-        const y = Math.max(0, Math.min(localY - offsetY, board.clientHeight - card.offsetHeight));
+        const x = localX - offsetX;
+        const y = localY - offsetY;
         card.style.left = `${x}px`;
         card.style.top = `${y}px`;
         drawConnectors();
@@ -507,6 +525,7 @@ HTML_TEMPLATE = """<!doctype html>
     function drawEndpointGlyph(svg, point, direction, kind) {
       const stroke = getComputedStyle(document.documentElement).getPropertyValue('--line').trim() || '#2f2966';
       const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      group.style.pointerEvents = 'none';
       if (kind === 'PK') {
         const a = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         const b = document.createElementNS('http://www.w3.org/2000/svg', 'line');
@@ -568,6 +587,19 @@ HTML_TEMPLATE = """<!doctype html>
         path.setAttribute('fill', 'none');
         path.setAttribute('stroke', '#2f2966');
         path.setAttribute('stroke-width', '2');
+        path.classList.add('connector-path');
+        if (activeRelationshipId === rel.id) {
+          path.classList.add('active');
+        }
+        path.addEventListener('click', (event) => {
+          event.stopPropagation();
+          activeRelationshipId = rel.id;
+          selectedEntityIds.clear();
+          selectedEntityIds.add(rel.fromId);
+          selectedEntityIds.add(rel.toId);
+          syncSelections();
+          drawConnectors();
+        });
         connectorLayer.appendChild(path);
 
         drawEndpointGlyph(connectorLayer, start, fromSide === 'right' ? 1 : -1, 'FK');
@@ -578,6 +610,27 @@ HTML_TEMPLATE = """<!doctype html>
     function updateRelationshipPanel() {
       const relationshipsPanel = document.getElementById('relationships-panel');
       const exportBtn = document.getElementById('export-excel');
+
+      if (activeRelationshipId) {
+        const rel = normalizedRelationships.find(item => item.id === activeRelationshipId);
+        if (rel) {
+          const fromEntity = entitiesById.get(rel.fromId);
+          const toEntity = entitiesById.get(rel.toId);
+          relationshipsPanel.className = '';
+          relationshipsPanel.innerHTML = `
+            <div class='relationship-card'>
+              <div class='relationship-title'>Relazione selezionata</div>
+              <div><strong>Entità origine:</strong> ${fromEntity.name}</div>
+              <div><strong>Campo FK:</strong> ${rel.from_field || '?'}</div>
+              <div><strong>Entità destinazione:</strong> ${toEntity.name}</div>
+              <div><strong>Campo PK:</strong> ${rel.to_field || '?'}</div>
+              <div style='margin-top:6px;'>source: ${rel.source || 'n/a'} • confidence: ${(rel.confidence ?? 0).toFixed(2)}</div>
+            </div>
+          `;
+          exportBtn.disabled = false;
+          return;
+        }
+      }
 
       if (selectedEntityIds.size === 0) {
         relationshipsPanel.className = 'empty-state';
@@ -677,6 +730,7 @@ HTML_TEMPLATE = """<!doctype html>
       card.className = 'entity-card';
       card.innerHTML = `<strong>${entity.name}</strong><div class='meta'>${entity.source_system} • ${entity.source_type}</div>`;
       card.addEventListener('click', () => {
+        activeRelationshipId = null;
         if (selectedEntityIds.has(entity.id)) {
           selectedEntityIds.delete(entity.id);
         } else {
