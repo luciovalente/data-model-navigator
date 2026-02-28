@@ -99,9 +99,14 @@ HTML_TEMPLATE = """<!doctype html>
       position: relative;
       height: 100%;
       overflow: hidden;
+      cursor: grab;
       background:
         radial-gradient(circle at 1px 1px, var(--grid) 1px, transparent 0) 0 0 / 24px 24px,
         #f4f5f9;
+    }
+
+    #board.panning {
+      cursor: grabbing;
     }
 
     #board-controls {
@@ -151,6 +156,7 @@ HTML_TEMPLATE = """<!doctype html>
       height: 100%;
       z-index: 1;
       pointer-events: auto;
+      overflow: visible;
     }
 
     .connector-path {
@@ -385,6 +391,12 @@ HTML_TEMPLATE = """<!doctype html>
     let scale = 1;
     let translateX = 0;
     let translateY = 0;
+    let panning = false;
+    let panPointerId = null;
+    let panStartX = 0;
+    let panStartY = 0;
+    let panInitialTranslateX = 0;
+    let panInitialTranslateY = 0;
 
     function applyViewport() {
       canvas.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
@@ -465,7 +477,6 @@ HTML_TEMPLATE = """<!doctype html>
           selectedEntityIds.add(entity.id);
         }
         syncSelections();
-        centerEntity(entity.id);
       });
 
       enableDrag(card, header);
@@ -560,11 +571,29 @@ HTML_TEMPLATE = """<!doctype html>
 
     function drawConnectors() {
       connectorLayer.innerHTML = '';
-      const width = board.clientWidth;
-      const height = board.clientHeight;
+
+      const cards = Array.from(entityElements.values());
+      const boardWidth = board.clientWidth;
+      const boardHeight = board.clientHeight;
+      const padding = 200;
+
+      let minX = 0;
+      let minY = 0;
+      let maxX = boardWidth;
+      let maxY = boardHeight;
+
+      cards.forEach((card) => {
+        minX = Math.min(minX, card.offsetLeft - padding);
+        minY = Math.min(minY, card.offsetTop - padding);
+        maxX = Math.max(maxX, card.offsetLeft + card.offsetWidth + padding);
+        maxY = Math.max(maxY, card.offsetTop + card.offsetHeight + padding);
+      });
+
+      const width = Math.max(1, maxX - minX);
+      const height = Math.max(1, maxY - minY);
       connectorLayer.setAttribute('width', `${width}`);
       connectorLayer.setAttribute('height', `${height}`);
-      connectorLayer.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      connectorLayer.setAttribute('viewBox', `${minX} ${minY} ${width} ${height}`);
 
       normalizedRelationships.forEach(rel => {
         const from = entityElements.get(rel.fromId);
@@ -757,6 +786,44 @@ HTML_TEMPLATE = """<!doctype html>
 
     document.getElementById('zoom-in').addEventListener('click', () => zoomBy(0.1));
     document.getElementById('zoom-out').addEventListener('click', () => zoomBy(-0.1));
+
+    board.addEventListener('pointerdown', (event) => {
+      const interactiveTarget = event.target.closest('.board-entity, #board-controls, .entity-card, .connector-path');
+      if (interactiveTarget) {
+        return;
+      }
+      panning = true;
+      panPointerId = event.pointerId;
+      panStartX = event.clientX;
+      panStartY = event.clientY;
+      panInitialTranslateX = translateX;
+      panInitialTranslateY = translateY;
+      board.classList.add('panning');
+      board.setPointerCapture(panPointerId);
+      event.preventDefault();
+    });
+
+    board.addEventListener('pointermove', (event) => {
+      if (!panning || event.pointerId !== panPointerId) {
+        return;
+      }
+      translateX = panInitialTranslateX + (event.clientX - panStartX);
+      translateY = panInitialTranslateY + (event.clientY - panStartY);
+      applyViewport();
+    });
+
+    function stopPan(event) {
+      if (!panning || event.pointerId !== panPointerId) {
+        return;
+      }
+      panning = false;
+      board.classList.remove('panning');
+      board.releasePointerCapture(panPointerId);
+      panPointerId = null;
+    }
+
+    board.addEventListener('pointerup', stopPan);
+    board.addEventListener('pointercancel', stopPan);
 
     syncSelections();
     applyViewport();
