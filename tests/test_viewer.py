@@ -93,3 +93,12 @@ def test_viewer_uses_svg_connectors_instead_of_network_library() -> None:
     assert "vis-network" not in html
     assert "<svg id='connector-layer'>" in html
     assert "drawEndpointGlyph" in html
+
+
+def test_viewer_limits_entity_card_fields_and_adds_fields_panel() -> None:
+    model = DataModel(entities=[])
+    html = build_viewer_html(model)
+    assert "slice(0, 5)" in html
+    assert "+${remainingCount} altri campi" in html
+    assert "entity-fields-panel" in html
+    assert "Campi entità selezionata" in html
