@@ -20,6 +20,7 @@ def test_viewer_renders_entities() -> None:
     html = build_viewer_html(model)
     assert "Data Model Navigator" in html
     assert "orders" in html
+    assert "board-entity" in html
 
 
 def test_embedded_json_is_valid_not_html_escaped() -> None:
@@ -68,9 +69,8 @@ def test_viewer_contains_relationship_panel_and_excel_export() -> None:
     assert "Relazioni Entità" in html
     assert "export-excel" in html
     assert "xlsx.full.min.js" in html
-    assert "networkContainer.style.display = 'none';" in html
-    assert "fallback-content" in html
-    assert "renderFallbackContent" in html
+    assert "connector-layer" in html
+    assert "drawConnectors" in html
 
 
 def test_viewer_uses_escaped_newline_in_csv_join() -> None:
@@ -79,16 +79,17 @@ def test_viewer_uses_escaped_newline_in_csv_join() -> None:
     assert "].join('\\n');" in html
 
 
-def test_viewer_uses_force_layout_for_graph_centering() -> None:
+def test_viewer_uses_drag_interaction_for_entities() -> None:
     model = DataModel(entities=[])
     html = build_viewer_html(model)
-    assert "solver: 'forceAtlas2Based'" in html
-    assert "network.once('stabilizationIterationsDone'" in html
-    assert "network.setOptions({ physics: false });" in html
+    assert "pointerdown" in html
+    assert "pointermove" in html
+    assert "enableDrag" in html
 
 
-def test_viewer_does_not_force_grid_coordinates_for_nodes() -> None:
+def test_viewer_uses_svg_connectors_instead_of_network_library() -> None:
     model = DataModel(entities=[])
     html = build_viewer_html(model)
-    assert "x: (idx % 4) * 280" not in html
-    assert "y: Math.floor(idx / 4) * 180" not in html
+    assert "vis-network" not in html
+    assert "<svg id='connector-layer'>" in html
+    assert "drawEndpointGlyph" in html
