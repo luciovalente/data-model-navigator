@@ -1,108 +1,213 @@
 from __future__ import annotations
 
-import html
 import json
 from pathlib import Path
 
 from datamodel_navigator.models import DataModel
 
 
-def build_viewer_html(model: DataModel) -> str:
-    payload = json.dumps(model.to_dict(), ensure_ascii=False)
-    # Keep JSON valid in <script type="application/json"> while avoiding accidental tag close.
-    safe_payload = payload.replace('</', '<\\/')
-    safe_payload = html.escape(payload)
-    return f"""<!doctype html>
+HTML_TEMPLATE = """<!doctype html>
 <html lang='it'>
 <head>
   <meta charset='utf-8' />
   <meta name='viewport' content='width=device-width, initial-scale=1' />
   <title>Data Model Navigator</title>
+  <link rel='stylesheet' href='https://unpkg.com/vis-network/styles/vis-network.min.css' />
   <style>
-    body {{ font-family: Arial, sans-serif; margin: 0; display: grid; grid-template-columns: 320px 1fr; height: 100vh; }}
-    #left {{ border-right: 1px solid #ddd; overflow: auto; padding: 12px; }}
-    #canvas {{ position: relative; overflow: auto; background: #fafafa; }}
-    .entity {{ border: 1px solid #999; border-radius: 6px; background: white; padding: 6px 10px; margin-bottom: 8px; cursor: pointer; }}
-    .entity h4 {{ margin: 0 0 6px; font-size: 14px; }}
-    .field {{ font-size: 12px; color: #444; }}
-    svg {{ position: absolute; inset: 0; pointer-events: none; }}
-    .node {{ position: absolute; width: 220px; background: #fff; border: 1px solid #666; border-radius: 8px; padding: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-    .node.selected {{ border-color: #0057d8; box-shadow: 0 0 0 2px rgba(0,87,216,.2); }}
+    :root {
+      --panel-bg: #f8f9fb;
+      --border: #d7dbe2;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --accent: #2563eb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, Arial, sans-serif;
+      color: var(--text);
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #left {
+      border-right: 1px solid var(--border);
+      background: var(--panel-bg);
+      overflow: auto;
+      padding: 14px;
+    }
+    .section-title {
+      margin: 0 0 10px;
+      font-size: 14px;
+      text-transform: uppercase;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+    #entity-list { display: grid; gap: 8px; margin-bottom: 20px; }
+    .entity-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: #fff;
+      cursor: pointer;
+      transition: border-color 120ms ease, box-shadow 120ms ease;
+    }
+    .entity-card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+    }
+    .entity-card .meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    #colors { display: grid; gap: 8px; margin-bottom: 20px; }
+    .color-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 8px;
+    }
+    #tips {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.45;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
+    }
+    #network { height: 100%; width: 100%; background: #ffffff; }
+    #fallback {
+      display: none;
+      padding: 16px;
+      color: #b91c1c;
+      font-weight: 600;
+    }
   </style>
 </head>
 <body>
   <aside id='left'>
-    <h3>Entità</h3>
-    <div id='list'></div>
+    <h2 style='margin: 0 0 12px;'>Data Model Navigator</h2>
+    <h3 class='section-title'>Entità</h3>
+    <div id='entity-list'></div>
+    <h3 class='section-title'>Colori per sorgente</h3>
+    <div id='colors'></div>
+    <h3 class='section-title'>Suggerimenti</h3>
+    <div id='tips'>
+      • Trascina un nodo per spostarlo liberamente.<br />
+      • Zoom con rotella o pinch del trackpad.<br />
+      • Click su un'entità nella lista per centrarla.<br />
+      • Modifica i colori per distinguere i sistemi sorgente.
+    </div>
   </aside>
-  <main id='canvas'>
-    <svg id='links'></svg>
+
+  <main style='position:relative;'>
+    <div id='fallback'>Impossibile caricare la libreria del viewer (vis-network).</div>
+    <div id='network'></div>
   </main>
-  <script id='model-data' type='application/json'>{safe_payload}</script>
+
+  <script id='model-data' type='application/json'>__MODEL_PAYLOAD__</script>
+  <script src='https://unpkg.com/vis-network/standalone/umd/vis-network.min.js'></script>
   <script>
     const model = JSON.parse(document.getElementById('model-data').textContent);
-    const canvas = document.getElementById('canvas');
-    const list = document.getElementById('list');
-    const linksSvg = document.getElementById('links');
 
-    const positions = new Map();
-    model.entities.forEach((entity, idx) => {{
-      positions.set(entity.id, {{x: 40 + (idx % 3) * 260, y: 40 + Math.floor(idx / 3) * 220}});
-    }});
+    const palette = ['#60a5fa', '#f59e0b', '#34d399', '#f472b6', '#a78bfa', '#f87171', '#22d3ee', '#94a3b8'];
+    const sourceTypes = [...new Set(model.entities.map(e => e.source_system || 'unknown'))];
+    const sourceColors = new Map(sourceTypes.map((source, idx) => [source, palette[idx % palette.length]]));
 
-    function draw() {{
-      canvas.querySelectorAll('.node').forEach(e => e.remove());
-      linksSvg.innerHTML = '';
-      linksSvg.setAttribute('width', canvas.scrollWidth || 1200);
-      linksSvg.setAttribute('height', canvas.scrollHeight || 900);
+    const nodes = new vis.DataSet(
+      model.entities.map((entity, idx) => ({
+        id: entity.id,
+        label: entity.name,
+        title: '<b>' + entity.name + '</b><br/>' + (entity.attributes || []).map(a => a.name + ': ' + a.type).join('<br/>'),
+        shape: 'box',
+        margin: 10,
+        color: {
+          background: sourceColors.get(entity.source_system || 'unknown'),
+          border: '#334155',
+          highlight: { background: '#dbeafe', border: '#1d4ed8' }
+        },
+        font: { color: '#0f172a', size: 14 },
+        x: (idx % 4) * 280,
+        y: Math.floor(idx / 4) * 180,
+        physics: false,
+      }))
+    );
 
-      for (const entity of model.entities) {{
-        const pos = positions.get(entity.id);
-        const div = document.createElement('div');
-        div.className = 'node';
-        div.style.left = pos.x + 'px';
-        div.style.top = pos.y + 'px';
-        div.dataset.entity = entity.id;
-        div.innerHTML = `<h4>${{entity.name}}</h4>` + entity.attributes.slice(0, 10).map(a => `<div class='field'>${{a.name}}: ${{a.type}}</div>`).join('');
-        div.onclick = () => {{
-          canvas.querySelectorAll('.node').forEach(n => n.classList.remove('selected'));
-          div.classList.add('selected');
-        }};
-        canvas.appendChild(div);
-      }}
+    const edges = new vis.DataSet(
+      model.relationships.map((rel, idx) => ({
+        id: `rel-${idx}`,
+        from: rel.from_entity,
+        to: rel.to_entity,
+        arrows: 'to',
+        label: rel.name || '',
+        font: { align: 'middle', size: 10 },
+        color: { color: '#3b82f6', highlight: '#2563eb' },
+        smooth: { type: 'cubicBezier', roundness: 0.2 }
+      }))
+    );
 
-      for (const rel of model.relationships) {{
-        const from = positions.get(rel.from_entity); const to = positions.get(rel.to_entity);
-        if (!from || !to) continue;
-        const x1 = from.x + 220; const y1 = from.y + 40;
-        const x2 = to.x; const y2 = to.y + 40;
-        const line = document.createElementNS('http://www.w3.org/2000/svg','line');
-        line.setAttribute('x1', x1); line.setAttribute('y1', y1);
-        line.setAttribute('x2', x2); line.setAttribute('y2', y2);
-        line.setAttribute('stroke', '#1976d2'); line.setAttribute('stroke-width', '2');
-        linksSvg.appendChild(line);
-      }}
+    const networkContainer = document.getElementById('network');
+    const fallback = document.getElementById('fallback');
 
-      list.innerHTML = '';
-      for (const entity of model.entities) {{
+    if (!window.vis || !window.vis.Network) {
+      fallback.style.display = 'block';
+    } else {
+      const network = new vis.Network(networkContainer, { nodes, edges }, {
+        layout: { improvedLayout: true },
+        interaction: { dragNodes: true, dragView: true, zoomView: true, hover: true, multiselect: true },
+        physics: { enabled: false },
+      });
+
+      const listEl = document.getElementById('entity-list');
+      model.entities.forEach(entity => {
         const card = document.createElement('div');
-        card.className = 'entity';
-        card.innerHTML = `<h4>${{entity.name}}</h4><div class='field'>${{entity.source_system}} • ${{entity.source_type}}</div>`;
-        card.onclick = () => {{
-          const node = canvas.querySelector(`[data-entity='${{entity.id}}']`);
-          if (node) {{
-            node.scrollIntoView({{behavior: 'smooth', block: 'center', inline: 'center'}});
-            node.click();
-          }}
-        }};
-        list.appendChild(card);
-      }}
-    }}
-    draw();
+        card.className = 'entity-card';
+        card.innerHTML = `<strong>${entity.name}</strong><div class='meta'>${entity.source_system} • ${entity.source_type}</div>`;
+        card.addEventListener('click', () => {
+          network.selectNodes([entity.id]);
+          network.focus(entity.id, { scale: 1, animation: { duration: 250 } });
+        });
+        listEl.appendChild(card);
+      });
+
+      const colorsEl = document.getElementById('colors');
+      sourceTypes.forEach(source => {
+        const row = document.createElement('label');
+        row.className = 'color-row';
+        row.innerHTML = `<span>${source}</span>`;
+
+        const input = document.createElement('input');
+        input.type = 'color';
+        input.value = sourceColors.get(source);
+        input.addEventListener('input', () => {
+          sourceColors.set(source, input.value);
+          const updates = model.entities
+            .filter(e => (e.source_system || 'unknown') === source)
+            .map(e => ({ id: e.id, color: { background: input.value, border: '#334155' } }));
+          nodes.update(updates);
+        });
+
+        row.appendChild(input);
+        colorsEl.appendChild(row);
+      });
+
+      window.addEventListener('resize', () => network.fit({ animation: false }));
+      network.fit({ animation: false });
+    }
   </script>
 </body>
 </html>
 """
+
+
+def build_viewer_html(model: DataModel) -> str:
+    payload = json.dumps(model.to_dict(), ensure_ascii=False)
+    safe_payload = payload.replace("</", "<\\/")
+    return HTML_TEMPLATE.replace("__MODEL_PAYLOAD__", safe_payload)
 
 
 def write_viewer(model: DataModel, path: str | Path) -> Path:
