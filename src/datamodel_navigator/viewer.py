@@ -86,6 +86,15 @@ HTML_TEMPLATE = """<!doctype html>
       margin-top: 4px;
     }
 
+    .search-input {
+      width: 100%;
+      margin-bottom: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      font-size: 13px;
+    }
+
     #board {
       position: relative;
       height: 100%;
@@ -93,6 +102,46 @@ HTML_TEMPLATE = """<!doctype html>
       background:
         radial-gradient(circle at 1px 1px, var(--grid) 1px, transparent 0) 0 0 / 24px 24px,
         #f4f5f9;
+    }
+
+    #board-controls {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.95);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 6px;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+    }
+
+    .zoom-btn {
+      border: 1px solid #c7ccda;
+      background: #fff;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 20px;
+      line-height: 1;
+    }
+
+    #zoom-label {
+      min-width: 52px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    #canvas {
+      position: absolute;
+      inset: 0;
+      transform-origin: 0 0;
     }
 
     #connector-layer {
@@ -132,6 +181,14 @@ HTML_TEMPLATE = """<!doctype html>
       justify-content: space-between;
       align-items: center;
       gap: 8px;
+    }
+
+    .board-entity.is-postgres .board-entity-header {
+      --accent: #b91c1c;
+    }
+
+    .board-entity.is-mongo .board-entity-header {
+      --accent: #1d4ed8;
     }
 
     .board-entity-header:active {
@@ -231,18 +288,27 @@ HTML_TEMPLATE = """<!doctype html>
   <aside id='left'>
     <h2 style='margin: 0 0 12px;'>Data Model Navigator</h2>
     <h3 class='section-title'>Entità</h3>
+    <input id='entity-search' class='search-input' type='search' placeholder='Cerca entità...' />
     <div id='entity-list'></div>
     <h3 class='section-title'>Suggerimenti</h3>
     <div id='tips'>
       • Clicca su una card per selezionarla.<br />
       • Trascina l'intestazione della card per spostarla.<br />
       • Le linee si aggiornano in tempo reale.<br />
-      • Doppio click su un'entità nella lista per evidenziarla.
+      • Cerca entità usando il filtro.<br />
+      • Clicca un'entità nella lista per centrarla.
     </div>
   </aside>
 
   <main id='board'>
-    <svg id='connector-layer'></svg>
+    <div id='board-controls'>
+      <button id='zoom-out' class='zoom-btn' title='Zoom out'>−</button>
+      <div id='zoom-label'>100%</div>
+      <button id='zoom-in' class='zoom-btn' title='Zoom in'>+</button>
+    </div>
+    <div id='canvas'>
+      <svg id='connector-layer'></svg>
+    </div>
   </main>
 
   <aside id='right'>
@@ -295,9 +361,36 @@ HTML_TEMPLATE = """<!doctype html>
       .filter(Boolean);
 
     const board = document.getElementById('board');
+    const canvas = document.getElementById('canvas');
     const connectorLayer = document.getElementById('connector-layer');
     const entityElements = new Map();
     const listEntries = new Map();
+    let scale = 1;
+    let translateX = 0;
+    let translateY = 0;
+
+    function applyViewport() {
+      canvas.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+      document.getElementById('zoom-label').textContent = `${Math.round(scale * 100)}%`;
+      drawConnectors();
+    }
+
+    function zoomBy(delta) {
+      scale = Math.max(0.5, Math.min(2, Number((scale + delta).toFixed(2))));
+      applyViewport();
+    }
+
+    function centerEntity(entityId) {
+      const card = entityElements.get(entityId);
+      if (!card) {
+        return;
+      }
+      const x = card.offsetLeft + card.offsetWidth / 2;
+      const y = card.offsetTop + card.offsetHeight / 2;
+      translateX = board.clientWidth / 2 - x * scale;
+      translateY = board.clientHeight / 2 - y * scale;
+      applyViewport();
+    }
 
     function attributeRole(attributeName) {
       if (!attributeName) {
@@ -317,6 +410,12 @@ HTML_TEMPLATE = """<!doctype html>
     function createEntityNode(entity, idx) {
       const card = document.createElement('article');
       card.className = 'board-entity';
+      const sourceType = (entity.source_type || '').toLowerCase();
+      if (sourceType.includes('postgres')) {
+        card.classList.add('is-postgres');
+      } else if (sourceType.includes('mongo')) {
+        card.classList.add('is-mongo');
+      }
       card.dataset.entityId = entity.id;
 
       const row = Math.floor(idx / 3);
@@ -338,7 +437,7 @@ HTML_TEMPLATE = """<!doctype html>
 
       card.appendChild(header);
       card.appendChild(table);
-      board.appendChild(card);
+      canvas.appendChild(card);
       entityElements.set(entity.id, card);
 
       card.addEventListener('click', () => {
@@ -348,6 +447,7 @@ HTML_TEMPLATE = """<!doctype html>
           selectedEntityIds.add(entity.id);
         }
         syncSelections();
+        centerEntity(entity.id);
       });
 
       enableDrag(card, header);
@@ -362,9 +462,9 @@ HTML_TEMPLATE = """<!doctype html>
       handle.addEventListener('pointerdown', (event) => {
         dragging = true;
         pointerId = event.pointerId;
-        const rect = card.getBoundingClientRect();
-        offsetX = event.clientX - rect.left;
-        offsetY = event.clientY - rect.top;
+        const boardRect = board.getBoundingClientRect();
+        offsetX = (event.clientX - boardRect.left - translateX) / scale - card.offsetLeft;
+        offsetY = (event.clientY - boardRect.top - translateY) / scale - card.offsetTop;
         handle.setPointerCapture(pointerId);
         event.preventDefault();
       });
@@ -374,8 +474,10 @@ HTML_TEMPLATE = """<!doctype html>
           return;
         }
         const boardRect = board.getBoundingClientRect();
-        const x = Math.max(0, Math.min(event.clientX - boardRect.left - offsetX, boardRect.width - card.offsetWidth));
-        const y = Math.max(0, Math.min(event.clientY - boardRect.top - offsetY, boardRect.height - card.offsetHeight));
+        const localX = (event.clientX - boardRect.left - translateX) / scale;
+        const localY = (event.clientY - boardRect.top - translateY) / scale;
+        const x = Math.max(0, Math.min(localX - offsetX, board.clientWidth - card.offsetWidth));
+        const y = Math.max(0, Math.min(localY - offsetY, board.clientHeight - card.offsetHeight));
         card.style.left = `${x}px`;
         card.style.top = `${y}px`;
         drawConnectors();
@@ -396,12 +498,10 @@ HTML_TEMPLATE = """<!doctype html>
 
     function getAnchorPoint(entityId, side) {
       const card = entityElements.get(entityId);
-      const boardRect = board.getBoundingClientRect();
-      const rect = card.getBoundingClientRect();
       if (side === 'left') {
-        return { x: rect.left - boardRect.left, y: rect.top - boardRect.top + rect.height / 2 };
+        return { x: card.offsetLeft, y: card.offsetTop + card.offsetHeight / 2 };
       }
-      return { x: rect.right - boardRect.left, y: rect.top - boardRect.top + rect.height / 2 };
+      return { x: card.offsetLeft + card.offsetWidth, y: card.offsetTop + card.offsetHeight / 2 };
     }
 
     function drawEndpointGlyph(svg, point, direction, kind) {
@@ -443,6 +543,8 @@ HTML_TEMPLATE = """<!doctype html>
       connectorLayer.innerHTML = '';
       const width = board.clientWidth;
       const height = board.clientHeight;
+      connectorLayer.setAttribute('width', `${width}`);
+      connectorLayer.setAttribute('height', `${height}`);
       connectorLayer.setAttribute('viewBox', `0 0 ${width} ${height}`);
 
       normalizedRelationships.forEach(rel => {
@@ -452,10 +554,8 @@ HTML_TEMPLATE = """<!doctype html>
           return;
         }
 
-        const fromRect = from.getBoundingClientRect();
-        const toRect = to.getBoundingClientRect();
-        const fromSide = fromRect.left <= toRect.left ? 'right' : 'left';
-        const toSide = fromRect.left <= toRect.left ? 'left' : 'right';
+        const fromSide = from.offsetLeft <= to.offsetLeft ? 'right' : 'left';
+        const toSide = from.offsetLeft <= to.offsetLeft ? 'left' : 'right';
         const start = getAnchorPoint(rel.fromId, fromSide);
         const end = getAnchorPoint(rel.toId, toSide);
 
@@ -583,12 +683,7 @@ HTML_TEMPLATE = """<!doctype html>
           selectedEntityIds.add(entity.id);
         }
         syncSelections();
-      });
-      card.addEventListener('dblclick', () => {
-        selectedEntityIds.add(entity.id);
-        syncSelections();
-        const node = entityElements.get(entity.id);
-        node.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+        centerEntity(entity.id);
       });
       listEl.appendChild(card);
       listEntries.set(entity.id, card);
@@ -597,8 +692,20 @@ HTML_TEMPLATE = """<!doctype html>
     window.addEventListener('resize', drawConnectors);
     document.getElementById('export-excel').addEventListener('click', exportSelectedEntities);
 
+    document.getElementById('entity-search').addEventListener('input', (event) => {
+      const query = event.target.value.trim().toLowerCase();
+      model.entities.forEach((entity) => {
+        const card = listEntries.get(entity.id);
+        const content = `${entity.name} ${entity.source_system || ''} ${entity.source_type || ''}`.toLowerCase();
+        card.style.display = content.includes(query) ? '' : 'none';
+      });
+    });
+
+    document.getElementById('zoom-in').addEventListener('click', () => zoomBy(0.1));
+    document.getElementById('zoom-out').addEventListener('click', () => zoomBy(-0.1));
+
     syncSelections();
-    drawConnectors();
+    applyViewport();
   </script>
 </body>
 </html>
