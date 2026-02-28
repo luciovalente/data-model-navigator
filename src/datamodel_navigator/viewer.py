@@ -267,6 +267,40 @@ HTML_TEMPLATE = """<!doctype html>
       font-weight: 700;
     }
 
+    #entity-fields-panel {
+      max-height: 320px;
+      overflow: auto;
+      border: 1px solid var(--border);
+      background: #fff;
+      border-radius: 8px;
+      padding: 8px;
+    }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      font-size: 13px;
+      padding: 6px 2px;
+      border-bottom: 1px solid #f3f4f6;
+      align-items: center;
+    }
+
+    .field-row:last-child {
+      border-bottom: none;
+    }
+
+    .field-type {
+      color: #374151;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .field-nullable {
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
     .empty-state {
       color: var(--muted);
       font-size: 13px;
@@ -336,6 +370,10 @@ HTML_TEMPLATE = """<!doctype html>
     <h3 class='section-title'>Relazioni Entità</h3>
     <div id='relationships-panel' class='empty-state'>
       Seleziona una o più entità per vedere le relazioni in ingresso/uscita.
+    </div>
+    <h3 class='section-title' style='margin-top:16px;'>Campi entità selezionata</h3>
+    <div id='entity-fields-panel' class='empty-state'>
+      Seleziona una sola entità per vedere tutti i campi.
     </div>
     <h3 class='section-title' style='margin-top:16px;'>Export campi entità selezionate</h3>
     <button id='export-excel' class='btn' disabled>Esporta in Excel (.xlsx)</button>
@@ -457,11 +495,18 @@ HTML_TEMPLATE = """<!doctype html>
 
       const table = document.createElement('table');
       table.className = 'entity-table';
-      const rows = (entity.attributes || []).map(attribute => {
+      const allAttributes = entity.attributes || [];
+      const rows = allAttributes.slice(0, 5).map(attribute => {
         const role = attributeRole(attribute.name);
         return `<tr><td>${attribute.name}</td><td>${attribute.type || ''}</td><td>${role}</td></tr>`;
       }).join('');
-      table.innerHTML = rows || "<tr><td colspan='3' style='color:#6b7280;'>Nessun attributo</td></tr>";
+      const remainingCount = allAttributes.length - 5;
+      const moreRow = remainingCount > 0
+        ? `<tr><td colspan='3' style='color:#6b7280; font-size:14px;'>+${remainingCount} altri campi</td></tr>`
+        : '';
+      table.innerHTML = rows
+        ? `${rows}${moreRow}`
+        : "<tr><td colspan='3' style='color:#6b7280;'>Nessun attributo</td></tr>";
 
       card.appendChild(header);
       card.appendChild(table);
@@ -702,6 +747,40 @@ HTML_TEMPLATE = """<!doctype html>
         listCard.classList.toggle('active', active);
       });
       updateRelationshipPanel();
+      updateFieldsPanel();
+    }
+
+    function updateFieldsPanel() {
+      const fieldsPanel = document.getElementById('entity-fields-panel');
+      if (selectedEntityIds.size !== 1) {
+        fieldsPanel.className = 'empty-state';
+        fieldsPanel.innerHTML = selectedEntityIds.size === 0
+          ? 'Seleziona una sola entità per vedere tutti i campi.'
+          : 'Hai selezionato più entità: scegli una singola entità per vedere tutti i campi.';
+        return;
+      }
+
+      const entityId = Array.from(selectedEntityIds)[0];
+      const entity = entitiesById.get(entityId);
+      const attributes = entity?.attributes || [];
+
+      if (attributes.length === 0) {
+        fieldsPanel.className = 'empty-state';
+        fieldsPanel.innerHTML = `L'entità <strong>${entity.name}</strong> non ha campi.`;
+        return;
+      }
+
+      fieldsPanel.className = '';
+      fieldsPanel.innerHTML = attributes.map(attribute => {
+        const nullable = attribute.nullable ? 'nullable' : 'not null';
+        return `
+          <div class='field-row'>
+            <span>${attribute.name}</span>
+            <span class='field-type'>${attribute.type || ''}</span>
+            <span class='field-nullable'>${nullable}</span>
+          </div>
+        `;
+      }).join('');
     }
 
     function exportSelectedEntities() {
