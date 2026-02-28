@@ -1,0 +1,60 @@
+{
+  "entities": [
+    {
+      "id": "pg:orders",
+      "name": "orders",
+      "source_system": "postgres",
+      "source_type": "table",
+      "attributes": [
+        {"name": "id", "type": "uuid", "nullable": false, "source": "postgres"},
+        {"name": "customer_id", "type": "uuid", "nullable": false, "source": "postgres"},
+        {"name": "amount", "type": "numeric", "nullable": false, "source": "postgres"}
+      ],
+      "tags": []
+    },
+    {
+      "id": "pg:customers",
+      "name": "customers",
+      "source_system": "postgres",
+      "source_type": "table",
+      "attributes": [
+        {"name": "id", "type": "uuid", "nullable": false, "source": "postgres"},
+        {"name": "email", "type": "text", "nullable": false, "source": "postgres"}
+      ],
+      "tags": []
+    },
+    {
+      "id": "mg:events",
+      "name": "events",
+      "source_system": "mongo",
+      "source_type": "collection",
+      "attributes": [
+        {"name": "_id", "type": "ObjectId", "nullable": false, "source": "mongo"},
+        {"name": "order_id", "type": "str", "nullable": false, "source": "mongo"},
+        {"name": "type", "type": "str", "nullable": false, "source": "mongo"}
+      ],
+      "tags": []
+    }
+  ],
+  "relationships": [
+    {
+      "id": "rel:pg:orders:customer_id->pg:customers:id",
+      "from_entity": "pg:orders",
+      "from_field": "customer_id",
+      "to_entity": "pg:customers",
+      "to_field": "id",
+      "confidence": 0.7,
+      "source": "auto"
+    },
+    {
+      "id": "rel:mg:events:order_id->pg:orders:id",
+      "from_entity": "mg:events",
+      "from_field": "order_id",
+      "to_entity": "pg:orders",
+      "to_field": "id",
+      "confidence": 1.0,
+      "source": "manual"
+    }
+  ],
+  "metadata": {"version": 1}
+}
