@@ -71,3 +71,9 @@ def test_viewer_contains_relationship_panel_and_excel_export() -> None:
     assert "networkContainer.style.display = 'none';" in html
     assert "fallback-content" in html
     assert "renderFallbackContent" in html
+
+
+def test_viewer_uses_escaped_newline_in_csv_join() -> None:
+    model = DataModel(entities=[])
+    html = build_viewer_html(model)
+    assert "].join('\\n');" in html

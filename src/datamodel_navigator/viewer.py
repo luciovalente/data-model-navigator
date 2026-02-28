@@ -422,7 +422,7 @@ HTML_TEMPLATE = """<!doctype html>
         const csv = [
           header.join(','),
           ...rows.map(row => header.map(key => JSON.stringify(row[key] ?? '')).join(',')),
-        ].join('\n');
+        ].join('\\n');
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
