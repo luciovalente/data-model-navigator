@@ -68,3 +68,4 @@ def test_viewer_contains_relationship_panel_and_excel_export() -> None:
     assert "Relazioni Entità" in html
     assert "export-excel" in html
     assert "xlsx.full.min.js" in html
+    assert "networkContainer.style.display = 'none';" in html
