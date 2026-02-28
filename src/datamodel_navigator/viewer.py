@@ -9,6 +9,8 @@ from datamodel_navigator.models import DataModel
 
 def build_viewer_html(model: DataModel) -> str:
     payload = json.dumps(model.to_dict(), ensure_ascii=False)
+    # Keep JSON valid in <script type="application/json"> while avoiding accidental tag close.
+    safe_payload = payload.replace('</', '<\\/')
     safe_payload = html.escape(payload)
     return f"""<!doctype html>
 <html lang='it'>
