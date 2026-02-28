@@ -12,106 +12,169 @@ HTML_TEMPLATE = """<!doctype html>
   <meta charset='utf-8' />
   <meta name='viewport' content='width=device-width, initial-scale=1' />
   <title>Data Model Navigator</title>
-  <link rel='stylesheet' href='https://unpkg.com/vis-network/styles/vis-network.min.css' />
   <style>
     :root {
       --panel-bg: #f8f9fb;
       --border: #d7dbe2;
-      --text: #1f2937;
+      --text: #111827;
       --muted: #6b7280;
-      --accent: #2563eb;
+      --accent: #241a8d;
+      --card-bg: #ffffff;
+      --grid: #eceff5;
+      --line: #2f2966;
     }
+
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
       font-family: Inter, Arial, sans-serif;
       color: var(--text);
       display: grid;
-      grid-template-columns: 340px 1fr 360px;
+      grid-template-columns: 300px 1fr 360px;
       height: 100vh;
       overflow: hidden;
+      background: #f2f4f8;
     }
+
+    #left,
+    #right {
+      background: var(--panel-bg);
+      overflow: auto;
+      padding: 14px;
+    }
+
     #left {
       border-right: 1px solid var(--border);
-      background: var(--panel-bg);
-      overflow: auto;
-      padding: 14px;
     }
+
     #right {
       border-left: 1px solid var(--border);
-      background: var(--panel-bg);
-      overflow: auto;
-      padding: 14px;
     }
+
     .section-title {
       margin: 0 0 10px;
-      font-size: 14px;
+      font-size: 13px;
       text-transform: uppercase;
       color: var(--muted);
       letter-spacing: 0.04em;
     }
-    #entity-list { display: grid; gap: 8px; margin-bottom: 20px; }
+
+    #entity-list {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
     .entity-card {
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 10px;
       padding: 8px 10px;
       background: #fff;
       transition: border-color 120ms ease, box-shadow 120ms ease;
-    }
-    .entity-card.active {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
-    }
-    .entity-card label {
-      display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 8px;
-      align-items: start;
       cursor: pointer;
     }
-    .entity-card:hover {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+
+    .entity-card.active {
+      border-color: #3730a3;
+      box-shadow: 0 0 0 2px rgba(55, 48, 163, 0.15);
     }
-    .entity-card .meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
-    #colors { display: grid; gap: 8px; margin-bottom: 20px; }
-    .color-row {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      align-items: center;
-      gap: 10px;
-      font-size: 13px;
-      background: #fff;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 6px 8px;
-    }
-    #tips {
+
+    .entity-card .meta {
       font-size: 12px;
       color: var(--muted);
-      line-height: 1.45;
-      background: #fff;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px;
+      margin-top: 4px;
     }
-    #network { height: 100%; width: 100%; background: #ffffff; }
-    .btn {
-      border: 1px solid var(--accent);
-      background: #eff6ff;
-      color: #1e40af;
-      border-radius: 8px;
-      padding: 8px 10px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
+
+    #board {
+      position: relative;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 1px 1px, var(--grid) 1px, transparent 0) 0 0 / 24px 24px,
+        #f4f5f9;
+    }
+
+    #connector-layer {
+      position: absolute;
+      inset: 0;
       width: 100%;
-      margin-bottom: 10px;
+      height: 100%;
+      pointer-events: none;
+      z-index: 1;
     }
-    .btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
+
+    .board-entity {
+      position: absolute;
+      min-width: 240px;
+      background: var(--card-bg);
+      border-radius: 14px;
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+      overflow: hidden;
+      z-index: 2;
+      user-select: none;
+      border: 1px solid #e5e7eb;
     }
+
+    .board-entity.selected {
+      box-shadow: 0 0 0 3px rgba(55, 48, 163, 0.25), 0 12px 26px rgba(15, 23, 42, 0.18);
+    }
+
+    .board-entity-header {
+      background: var(--accent);
+      color: white;
+      padding: 12px 14px;
+      font-weight: 700;
+      font-size: 20px;
+      letter-spacing: 0.01em;
+      cursor: grab;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .board-entity-header:active {
+      cursor: grabbing;
+    }
+
+    .source-pill {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 999px;
+      font-size: 11px;
+      padding: 2px 8px;
+      white-space: nowrap;
+      font-weight: 600;
+    }
+
+    .entity-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 22px;
+    }
+
+    .entity-table td {
+      padding: 6px 14px;
+      border-bottom: 1px solid #f3f4f6;
+      white-space: nowrap;
+    }
+
+    .entity-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .entity-table td:nth-child(2),
+    .entity-table td:nth-child(3) {
+      color: #111827;
+      font-weight: 700;
+      font-size: 18px;
+    }
+
+    .entity-table td:nth-child(3) {
+      color: #1f2937;
+      text-align: right;
+    }
+
     .relationship-card {
       border: 1px solid var(--border);
       background: #fff;
@@ -121,7 +184,11 @@ HTML_TEMPLATE = """<!doctype html>
       line-height: 1.4;
       margin-bottom: 8px;
     }
-    .relationship-title { font-weight: 700; }
+
+    .relationship-title {
+      font-weight: 700;
+    }
+
     .empty-state {
       color: var(--muted);
       font-size: 13px;
@@ -130,34 +197,33 @@ HTML_TEMPLATE = """<!doctype html>
       border-radius: 8px;
       padding: 10px;
     }
-    #fallback {
-      display: none;
-      padding: 16px;
-      color: #92400e;
-      background: #fffbeb;
-      border-bottom: 1px solid #fcd34d;
-      font-weight: 600;
-    }
-    #fallback-content {
-      display: none;
-      padding: 16px;
-      overflow: auto;
-      height: 100%;
-      background: #fff;
-    }
-    .fallback-entity {
-      border: 1px solid var(--border);
+
+    .btn {
+      border: 1px solid #3730a3;
+      background: #ede9fe;
+      color: #312e81;
       border-radius: 8px;
-      padding: 10px;
+      padding: 8px 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
       margin-bottom: 10px;
     }
-    .fallback-entity-title {
-      font-weight: 700;
-      margin-bottom: 6px;
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
-    .fallback-rel {
-      font-size: 13px;
+
+    #tips {
+      font-size: 12px;
       color: var(--muted);
+      line-height: 1.45;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px;
     }
   </style>
 </head>
@@ -166,27 +232,23 @@ HTML_TEMPLATE = """<!doctype html>
     <h2 style='margin: 0 0 12px;'>Data Model Navigator</h2>
     <h3 class='section-title'>Entità</h3>
     <div id='entity-list'></div>
-    <h3 class='section-title'>Colori per sorgente</h3>
-    <div id='colors'></div>
     <h3 class='section-title'>Suggerimenti</h3>
     <div id='tips'>
-      • Trascina un nodo per spostarlo liberamente.<br />
-      • Zoom con rotella o pinch del trackpad.<br />
-      • Click su un'entità nella lista per centrarla.<br />
-      • Modifica i colori per distinguere i sistemi sorgente.
+      • Clicca su una card per selezionarla.<br />
+      • Trascina l'intestazione della card per spostarla.<br />
+      • Le linee si aggiornano in tempo reale.<br />
+      • Doppio click su un'entità nella lista per evidenziarla.
     </div>
   </aside>
 
-  <main style='position:relative;'>
-    <div id='fallback'>Modalità compatibilità: libreria vis-network non disponibile. Mostro entità e relazioni in formato elenco.</div>
-    <div id='network'></div>
-    <div id='fallback-content'></div>
+  <main id='board'>
+    <svg id='connector-layer'></svg>
   </main>
 
   <aside id='right'>
     <h3 class='section-title'>Relazioni Entità</h3>
     <div id='relationships-panel' class='empty-state'>
-      Seleziona una o più entità dalla lista a sinistra per vedere le relazioni in ingresso/uscita.
+      Seleziona una o più entità per vedere le relazioni in ingresso/uscita.
     </div>
     <h3 class='section-title' style='margin-top:16px;'>Export campi entità selezionate</h3>
     <button id='export-excel' class='btn' disabled>Esporta in Excel (.xlsx)</button>
@@ -196,17 +258,12 @@ HTML_TEMPLATE = """<!doctype html>
   </aside>
 
   <script id='model-data' type='application/json'>__MODEL_PAYLOAD__</script>
-  <script src='https://unpkg.com/vis-network/standalone/umd/vis-network.min.js'></script>
   <script src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'></script>
   <script>
     const model = JSON.parse(document.getElementById('model-data').textContent);
     const entitiesById = new Map(model.entities.map(entity => [entity.id, entity]));
     const entitiesByName = new Map(model.entities.map(entity => [entity.name, entity]));
     const selectedEntityIds = new Set();
-
-    const palette = ['#60a5fa', '#f59e0b', '#34d399', '#f472b6', '#a78bfa', '#f87171', '#22d3ee', '#94a3b8'];
-    const sourceTypes = [...new Set(model.entities.map(e => e.source_system || 'unknown'))];
-    const sourceColors = new Map(sourceTypes.map((source, idx) => [source, palette[idx % palette.length]]));
 
     function getEntityId(entityRef) {
       if (entitiesById.has(entityRef)) {
@@ -237,238 +294,311 @@ HTML_TEMPLATE = """<!doctype html>
       })
       .filter(Boolean);
 
-    const networkContainer = document.getElementById('network');
-    const fallback = document.getElementById('fallback');
-    const fallbackContent = document.getElementById('fallback-content');
+    const board = document.getElementById('board');
+    const connectorLayer = document.getElementById('connector-layer');
+    const entityElements = new Map();
+    const listEntries = new Map();
 
-    function renderFallbackContent() {
-      const relationshipsByEntity = new Map(model.entities.map(entity => [entity.id, []]));
-      normalizedRelationships.forEach(rel => {
-        if (relationshipsByEntity.has(rel.fromId)) {
-          relationshipsByEntity.get(rel.fromId).push(rel);
+    function attributeRole(attributeName) {
+      if (!attributeName) {
+        return '';
+      }
+      const hasOutgoing = normalizedRelationships.some(rel => rel.from_field === attributeName);
+      const hasIncoming = normalizedRelationships.some(rel => rel.to_field === attributeName);
+      if (hasOutgoing) {
+        return 'FK';
+      }
+      if (hasIncoming) {
+        return 'PK';
+      }
+      return '';
+    }
+
+    function createEntityNode(entity, idx) {
+      const card = document.createElement('article');
+      card.className = 'board-entity';
+      card.dataset.entityId = entity.id;
+
+      const row = Math.floor(idx / 3);
+      const col = idx % 3;
+      card.style.left = `${50 + col * 320}px`;
+      card.style.top = `${40 + row * 280}px`;
+
+      const header = document.createElement('header');
+      header.className = 'board-entity-header';
+      header.innerHTML = `<span>${entity.name}</span><span class='source-pill'>${entity.source_system || 'unknown'}</span>`;
+
+      const table = document.createElement('table');
+      table.className = 'entity-table';
+      const rows = (entity.attributes || []).map(attribute => {
+        const role = attributeRole(attribute.name);
+        return `<tr><td>${attribute.name}</td><td>${attribute.type || ''}</td><td>${role}</td></tr>`;
+      }).join('');
+      table.innerHTML = rows || "<tr><td colspan='3' style='color:#6b7280;'>Nessun attributo</td></tr>";
+
+      card.appendChild(header);
+      card.appendChild(table);
+      board.appendChild(card);
+      entityElements.set(entity.id, card);
+
+      card.addEventListener('click', () => {
+        if (selectedEntityIds.has(entity.id)) {
+          selectedEntityIds.delete(entity.id);
+        } else {
+          selectedEntityIds.add(entity.id);
         }
-        if (relationshipsByEntity.has(rel.toId) && rel.toId !== rel.fromId) {
-          relationshipsByEntity.get(rel.toId).push(rel);
-        }
+        syncSelections();
       });
 
-      fallbackContent.innerHTML = model.entities.map(entity => {
-        const rels = relationshipsByEntity.get(entity.id) || [];
-        const relMarkup = rels.length === 0
-          ? "<div class='fallback-rel'>Nessuna relazione.</div>"
-          : rels.map(rel => {
-            const fromEntity = entitiesById.get(rel.fromId);
-            const toEntity = entitiesById.get(rel.toId);
-            return `<div class='fallback-rel'>${fromEntity.name}.${rel.from_field || '?'} → ${toEntity.name}.${rel.to_field || '?'}</div>`;
-          }).join('');
+      enableDrag(card, header);
+    }
 
+    function enableDrag(card, handle) {
+      let dragging = false;
+      let pointerId = null;
+      let offsetX = 0;
+      let offsetY = 0;
+
+      handle.addEventListener('pointerdown', (event) => {
+        dragging = true;
+        pointerId = event.pointerId;
+        const rect = card.getBoundingClientRect();
+        offsetX = event.clientX - rect.left;
+        offsetY = event.clientY - rect.top;
+        handle.setPointerCapture(pointerId);
+        event.preventDefault();
+      });
+
+      handle.addEventListener('pointermove', (event) => {
+        if (!dragging || event.pointerId !== pointerId) {
+          return;
+        }
+        const boardRect = board.getBoundingClientRect();
+        const x = Math.max(0, Math.min(event.clientX - boardRect.left - offsetX, boardRect.width - card.offsetWidth));
+        const y = Math.max(0, Math.min(event.clientY - boardRect.top - offsetY, boardRect.height - card.offsetHeight));
+        card.style.left = `${x}px`;
+        card.style.top = `${y}px`;
+        drawConnectors();
+      });
+
+      function stopDrag(event) {
+        if (event.pointerId !== pointerId) {
+          return;
+        }
+        dragging = false;
+        handle.releasePointerCapture(pointerId);
+        pointerId = null;
+      }
+
+      handle.addEventListener('pointerup', stopDrag);
+      handle.addEventListener('pointercancel', stopDrag);
+    }
+
+    function getAnchorPoint(entityId, side) {
+      const card = entityElements.get(entityId);
+      const boardRect = board.getBoundingClientRect();
+      const rect = card.getBoundingClientRect();
+      if (side === 'left') {
+        return { x: rect.left - boardRect.left, y: rect.top - boardRect.top + rect.height / 2 };
+      }
+      return { x: rect.right - boardRect.left, y: rect.top - boardRect.top + rect.height / 2 };
+    }
+
+    function drawEndpointGlyph(svg, point, direction, kind) {
+      const stroke = getComputedStyle(document.documentElement).getPropertyValue('--line').trim() || '#2f2966';
+      const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      if (kind === 'PK') {
+        const a = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        const b = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        [a, b].forEach((line, idx) => {
+          const shift = idx === 0 ? 0 : 4;
+          line.setAttribute('x1', `${point.x + direction * shift}`);
+          line.setAttribute('y1', `${point.y - 8}`);
+          line.setAttribute('x2', `${point.x + direction * shift}`);
+          line.setAttribute('y2', `${point.y + 8}`);
+          line.setAttribute('stroke', stroke);
+          line.setAttribute('stroke-width', '2');
+          group.appendChild(line);
+        });
+      } else {
+        const l1 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        const l2 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        const l3 = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        const endX = point.x + direction * 10;
+        [[point.x, point.y, endX, point.y - 8], [point.x, point.y, endX, point.y + 8], [point.x, point.y, endX, point.y]].forEach((coords, idx) => {
+          const line = [l1, l2, l3][idx];
+          line.setAttribute('x1', `${coords[0]}`);
+          line.setAttribute('y1', `${coords[1]}`);
+          line.setAttribute('x2', `${coords[2]}`);
+          line.setAttribute('y2', `${coords[3]}`);
+          line.setAttribute('stroke', stroke);
+          line.setAttribute('stroke-width', '2');
+          group.appendChild(line);
+        });
+      }
+      svg.appendChild(group);
+    }
+
+    function drawConnectors() {
+      connectorLayer.innerHTML = '';
+      const width = board.clientWidth;
+      const height = board.clientHeight;
+      connectorLayer.setAttribute('viewBox', `0 0 ${width} ${height}`);
+
+      normalizedRelationships.forEach(rel => {
+        const from = entityElements.get(rel.fromId);
+        const to = entityElements.get(rel.toId);
+        if (!from || !to) {
+          return;
+        }
+
+        const fromRect = from.getBoundingClientRect();
+        const toRect = to.getBoundingClientRect();
+        const fromSide = fromRect.left <= toRect.left ? 'right' : 'left';
+        const toSide = fromRect.left <= toRect.left ? 'left' : 'right';
+        const start = getAnchorPoint(rel.fromId, fromSide);
+        const end = getAnchorPoint(rel.toId, toSide);
+
+        const delta = Math.max(60, Math.abs(end.x - start.x) * 0.5);
+        const c1x = fromSide === 'right' ? start.x + delta : start.x - delta;
+        const c2x = toSide === 'left' ? end.x - delta : end.x + delta;
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('d', `M ${start.x} ${start.y} C ${c1x} ${start.y}, ${c2x} ${end.y}, ${end.x} ${end.y}`);
+        path.setAttribute('fill', 'none');
+        path.setAttribute('stroke', '#2f2966');
+        path.setAttribute('stroke-width', '2');
+        connectorLayer.appendChild(path);
+
+        drawEndpointGlyph(connectorLayer, start, fromSide === 'right' ? 1 : -1, 'FK');
+        drawEndpointGlyph(connectorLayer, end, toSide === 'left' ? -1 : 1, 'PK');
+      });
+    }
+
+    function updateRelationshipPanel() {
+      const relationshipsPanel = document.getElementById('relationships-panel');
+      const exportBtn = document.getElementById('export-excel');
+
+      if (selectedEntityIds.size === 0) {
+        relationshipsPanel.className = 'empty-state';
+        relationshipsPanel.innerHTML = 'Seleziona una o più entità per vedere le relazioni in ingresso/uscita.';
+        exportBtn.disabled = true;
+        return;
+      }
+
+      const selected = Array.from(selectedEntityIds);
+      const visibleRelationships = normalizedRelationships.filter(rel => selected.includes(rel.fromId) || selected.includes(rel.toId));
+
+      exportBtn.disabled = false;
+
+      if (visibleRelationships.length === 0) {
+        relationshipsPanel.className = 'empty-state';
+        relationshipsPanel.innerHTML = 'Nessuna relazione trovata per le entità selezionate.';
+        return;
+      }
+
+      relationshipsPanel.className = '';
+      relationshipsPanel.innerHTML = visibleRelationships.map(rel => {
+        const fromEntity = entitiesById.get(rel.fromId);
+        const toEntity = entitiesById.get(rel.toId);
         return `
-          <div class='fallback-entity'>
-            <div class='fallback-entity-title'>${entity.name}</div>
-            <div class='meta'>${entity.source_system} • ${entity.source_type}</div>
-            ${relMarkup}
+          <div class='relationship-card'>
+            <div class='relationship-title'>${fromEntity.name}.${rel.from_field || '?'} → ${toEntity.name}.${rel.to_field || '?'}</div>
+            <div>source: ${rel.source || 'n/a'} • confidence: ${(rel.confidence ?? 0).toFixed(2)}</div>
           </div>
         `;
       }).join('');
     }
 
-    if (!window.vis || !window.vis.Network) {
-      fallback.style.display = 'block';
-      networkContainer.style.display = 'none';
-      fallbackContent.style.display = 'block';
-      renderFallbackContent();
-    } else {
-      const nodes = new vis.DataSet(
-        model.entities.map((entity, idx) => ({
-          id: entity.id,
-          label: entity.name,
-          title: '<b>' + entity.name + '</b><br/>' + (entity.attributes || []).map(a => a.name + ': ' + a.type).join('<br/>'),
-          shape: 'box',
-          margin: 10,
-          color: {
-            background: sourceColors.get(entity.source_system || 'unknown'),
-            border: '#334155',
-            highlight: { background: '#dbeafe', border: '#1d4ed8' }
-          },
-          font: { color: '#0f172a', size: 14 },
-        }))
-      );
-
-      const edges = new vis.DataSet(
-        normalizedRelationships.map((rel, idx) => ({
-          id: `rel-${idx}`,
-          from: rel.fromId,
-          to: rel.toId,
-          arrows: 'to',
-          label: `${rel.from_field || '?'} → ${rel.to_field || '?'}`,
-          font: { align: 'middle', size: 10 },
-          color: { color: '#3b82f6', highlight: '#2563eb' },
-          smooth: { type: 'cubicBezier', roundness: 0.2 }
-        }))
-      );
-
-      const network = new vis.Network(networkContainer, { nodes, edges }, {
-        layout: {
-          improvedLayout: true,
-          randomSeed: 7,
-        },
-        interaction: { dragNodes: true, dragView: true, zoomView: true, hover: true, multiselect: true },
-        physics: {
-          enabled: true,
-          solver: 'forceAtlas2Based',
-          stabilization: { iterations: 120 },
-          forceAtlas2Based: {
-            springLength: 170,
-            damping: 0.55,
-          },
-        },
+    function syncSelections() {
+      model.entities.forEach(entity => {
+        const node = entityElements.get(entity.id);
+        const listCard = listEntries.get(entity.id);
+        const active = selectedEntityIds.has(entity.id);
+        node.classList.toggle('selected', active);
+        listCard.classList.toggle('active', active);
       });
+      updateRelationshipPanel();
+    }
 
-      const relationshipsPanel = document.getElementById('relationships-panel');
-      const exportBtn = document.getElementById('export-excel');
-
-      function updateRelationshipPanel() {
-        if (selectedEntityIds.size === 0) {
-          relationshipsPanel.className = 'empty-state';
-          relationshipsPanel.innerHTML = 'Seleziona una o più entità dalla lista a sinistra per vedere le relazioni in ingresso/uscita.';
-          exportBtn.disabled = true;
-          return;
-        }
-
-        const selected = Array.from(selectedEntityIds);
-        const visibleRelationships = normalizedRelationships.filter(rel => selected.includes(rel.fromId) || selected.includes(rel.toId));
-
-        exportBtn.disabled = false;
-
-        if (visibleRelationships.length === 0) {
-          relationshipsPanel.className = 'empty-state';
-          relationshipsPanel.innerHTML = 'Nessuna relazione trovata per le entità selezionate.';
-          return;
-        }
-
-        relationshipsPanel.className = '';
-        relationshipsPanel.innerHTML = visibleRelationships.map(rel => {
-          const fromEntity = entitiesById.get(rel.fromId);
-          const toEntity = entitiesById.get(rel.toId);
-          return `
-            <div class='relationship-card'>
-              <div class='relationship-title'>${fromEntity.name}.${rel.from_field || '?'} → ${toEntity.name}.${rel.to_field || '?'}</div>
-              <div>source: ${rel.source || 'n/a'} • confidence: ${(rel.confidence ?? 0).toFixed(2)}</div>
-            </div>
-          `;
-        }).join('');
+    function exportSelectedEntities() {
+      const selectedEntities = model.entities.filter(entity => selectedEntityIds.has(entity.id));
+      if (selectedEntities.length === 0) {
+        return;
       }
 
-      function exportSelectedEntities() {
-        const selectedEntities = model.entities.filter(entity => selectedEntityIds.has(entity.id));
-        if (selectedEntities.length === 0) {
-          return;
-        }
-
-        const rows = selectedEntities.flatMap(entity => {
-          if (!entity.attributes || entity.attributes.length === 0) {
-            return [{
-              Entita: entity.name,
-              Campo: '',
-              Tipo: '',
-              Nullable: '',
-              SistemaSorgente: entity.source_system,
-              TipoSorgente: entity.source_type,
-            }];
-          }
-          return entity.attributes.map(attribute => ({
+      const rows = selectedEntities.flatMap(entity => {
+        if (!entity.attributes || entity.attributes.length === 0) {
+          return [{
             Entita: entity.name,
-            Campo: attribute.name,
-            Tipo: attribute.type,
-            Nullable: attribute.nullable,
+            Campo: '',
+            Tipo: '',
+            Nullable: '',
             SistemaSorgente: entity.source_system,
             TipoSorgente: entity.source_type,
-          }));
-        });
-
-        if (window.XLSX && window.XLSX.utils) {
-          const sheet = XLSX.utils.json_to_sheet(rows);
-          const workbook = XLSX.utils.book_new();
-          XLSX.utils.book_append_sheet(workbook, sheet, 'CampiEntita');
-          XLSX.writeFile(workbook, 'entita_selezionate.xlsx');
-          return;
+          }];
         }
+        return entity.attributes.map(attribute => ({
+          Entita: entity.name,
+          Campo: attribute.name,
+          Tipo: attribute.type,
+          Nullable: attribute.nullable,
+          SistemaSorgente: entity.source_system,
+          TipoSorgente: entity.source_type,
+        }));
+      });
 
-        const header = Object.keys(rows[0]);
-        const csv = [
-          header.join(','),
-          ...rows.map(row => header.map(key => JSON.stringify(row[key] ?? '')).join(',')),
-        ].join('\\n');
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'entita_selezionate.csv';
-        a.click();
-        URL.revokeObjectURL(a.href);
+      if (window.XLSX && window.XLSX.utils) {
+        const sheet = XLSX.utils.json_to_sheet(rows);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, sheet, 'CampiEntita');
+        XLSX.writeFile(workbook, 'entita_selezionate.xlsx');
+        return;
       }
 
-      const listEl = document.getElementById('entity-list');
-      model.entities.forEach(entity => {
-        const card = document.createElement('div');
-        card.className = 'entity-card';
-        card.innerHTML = `
-          <label>
-            <input type='checkbox' data-entity-id='${entity.id}' />
-            <span><strong>${entity.name}</strong><div class='meta'>${entity.source_system} • ${entity.source_type}</div></span>
-          </label>
-        `;
-        const checkbox = card.querySelector('input');
-
-        checkbox.addEventListener('change', () => {
-          if (checkbox.checked) {
-            selectedEntityIds.add(entity.id);
-            card.classList.add('active');
-          } else {
-            selectedEntityIds.delete(entity.id);
-            card.classList.remove('active');
-          }
-          network.selectNodes(Array.from(selectedEntityIds));
-          updateRelationshipPanel();
-        });
-
-        card.addEventListener('dblclick', () => {
-          network.focus(entity.id, { scale: 1, animation: { duration: 250 } });
-        });
-        listEl.appendChild(card);
-      });
-
-      exportBtn.addEventListener('click', exportSelectedEntities);
-      updateRelationshipPanel();
-
-      const colorsEl = document.getElementById('colors');
-      sourceTypes.forEach(source => {
-        const row = document.createElement('label');
-        row.className = 'color-row';
-        row.innerHTML = `<span>${source}</span>`;
-
-        const input = document.createElement('input');
-        input.type = 'color';
-        input.value = sourceColors.get(source);
-        input.addEventListener('input', () => {
-          sourceColors.set(source, input.value);
-          const updates = model.entities
-            .filter(e => (e.source_system || 'unknown') === source)
-            .map(e => ({ id: e.id, color: { background: input.value, border: '#334155' } }));
-          nodes.update(updates);
-        });
-
-        row.appendChild(input);
-        colorsEl.appendChild(row);
-      });
-
-      network.once('stabilizationIterationsDone', () => {
-        network.setOptions({ physics: false });
-        network.fit({ animation: false });
-      });
-
-      setTimeout(() => network.fit({ animation: false }), 80);
-      window.addEventListener('resize', () => network.fit({ animation: false }));
+      const header = Object.keys(rows[0]);
+      const csv = [
+        header.join(','),
+        ...rows.map(row => header.map(key => JSON.stringify(row[key] ?? '')).join(',')),
+      ].join('\\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'entita_selezionate.csv';
+      a.click();
+      URL.revokeObjectURL(a.href);
     }
+
+    const listEl = document.getElementById('entity-list');
+    model.entities.forEach((entity, idx) => {
+      createEntityNode(entity, idx);
+
+      const card = document.createElement('div');
+      card.className = 'entity-card';
+      card.innerHTML = `<strong>${entity.name}</strong><div class='meta'>${entity.source_system} • ${entity.source_type}</div>`;
+      card.addEventListener('click', () => {
+        if (selectedEntityIds.has(entity.id)) {
+          selectedEntityIds.delete(entity.id);
+        } else {
+          selectedEntityIds.add(entity.id);
+        }
+        syncSelections();
+      });
+      card.addEventListener('dblclick', () => {
+        selectedEntityIds.add(entity.id);
+        syncSelections();
+        const node = entityElements.get(entity.id);
+        node.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+      });
+      listEl.appendChild(card);
+      listEntries.set(entity.id, card);
+    });
+
+    window.addEventListener('resize', drawConnectors);
+    document.getElementById('export-excel').addEventListener('click', exportSelectedEntities);
+
+    syncSelections();
+    drawConnectors();
   </script>
 </body>
 </html>
