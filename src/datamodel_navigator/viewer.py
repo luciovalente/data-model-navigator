@@ -208,25 +208,6 @@ HTML_TEMPLATE = """<!doctype html>
     const sourceTypes = [...new Set(model.entities.map(e => e.source_system || 'unknown'))];
     const sourceColors = new Map(sourceTypes.map((source, idx) => [source, palette[idx % palette.length]]));
 
-    const nodes = new vis.DataSet(
-      model.entities.map((entity, idx) => ({
-        id: entity.id,
-        label: entity.name,
-        title: '<b>' + entity.name + '</b><br/>' + (entity.attributes || []).map(a => a.name + ': ' + a.type).join('<br/>'),
-        shape: 'box',
-        margin: 10,
-        color: {
-          background: sourceColors.get(entity.source_system || 'unknown'),
-          border: '#334155',
-          highlight: { background: '#dbeafe', border: '#1d4ed8' }
-        },
-        font: { color: '#0f172a', size: 14 },
-        x: (idx % 4) * 280,
-        y: Math.floor(idx / 4) * 180,
-        physics: false,
-      }))
-    );
-
     function getEntityId(entityRef) {
       if (entitiesById.has(entityRef)) {
         return entityRef;
@@ -255,19 +236,6 @@ HTML_TEMPLATE = """<!doctype html>
         };
       })
       .filter(Boolean);
-
-    const edges = new vis.DataSet(
-      normalizedRelationships.map((rel, idx) => ({
-        id: `rel-${idx}`,
-        from: rel.fromId,
-        to: rel.toId,
-        arrows: 'to',
-        label: `${rel.from_field || '?'} → ${rel.to_field || '?'}`,
-        font: { align: 'middle', size: 10 },
-        color: { color: '#3b82f6', highlight: '#2563eb' },
-        smooth: { type: 'cubicBezier', roundness: 0.2 }
-      }))
-    );
 
     const networkContainer = document.getElementById('network');
     const fallback = document.getElementById('fallback');
@@ -323,9 +291,6 @@ HTML_TEMPLATE = """<!doctype html>
             highlight: { background: '#dbeafe', border: '#1d4ed8' }
           },
           font: { color: '#0f172a', size: 14 },
-          x: (idx % 4) * 280,
-          y: Math.floor(idx / 4) * 180,
-          physics: false,
         }))
       );
 
@@ -343,9 +308,20 @@ HTML_TEMPLATE = """<!doctype html>
       );
 
       const network = new vis.Network(networkContainer, { nodes, edges }, {
-        layout: { improvedLayout: true },
+        layout: {
+          improvedLayout: true,
+          randomSeed: 7,
+        },
         interaction: { dragNodes: true, dragView: true, zoomView: true, hover: true, multiselect: true },
-        physics: { enabled: false },
+        physics: {
+          enabled: true,
+          solver: 'forceAtlas2Based',
+          stabilization: { iterations: 120 },
+          forceAtlas2Based: {
+            springLength: 170,
+            damping: 0.55,
+          },
+        },
       });
 
       const relationshipsPanel = document.getElementById('relationships-panel');
@@ -485,8 +461,13 @@ HTML_TEMPLATE = """<!doctype html>
         colorsEl.appendChild(row);
       });
 
+      network.once('stabilizationIterationsDone', () => {
+        network.setOptions({ physics: false });
+        network.fit({ animation: false });
+      });
+
+      setTimeout(() => network.fit({ animation: false }), 80);
       window.addEventListener('resize', () => network.fit({ animation: false }));
-      network.fit({ animation: false });
     }
   </script>
 </body>
