@@ -590,6 +590,8 @@ HTML_TEMPLATE = """<!doctype html>
 
       const width = Math.max(1, maxX - minX);
       const height = Math.max(1, maxY - minY);
+      connectorLayer.style.left = `${minX}px`;
+      connectorLayer.style.top = `${minY}px`;
       connectorLayer.setAttribute('width', `${width}`);
       connectorLayer.setAttribute('height', `${height}`);
       connectorLayer.setAttribute('viewBox', `${minX} ${minY} ${width} ${height}`);
