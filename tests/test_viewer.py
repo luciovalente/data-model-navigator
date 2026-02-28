@@ -85,3 +85,10 @@ def test_viewer_uses_force_layout_for_graph_centering() -> None:
     assert "solver: 'forceAtlas2Based'" in html
     assert "network.once('stabilizationIterationsDone'" in html
     assert "network.setOptions({ physics: false });" in html
+
+
+def test_viewer_does_not_force_grid_coordinates_for_nodes() -> None:
+    model = DataModel(entities=[])
+    html = build_viewer_html(model)
+    assert "x: (idx % 4) * 280" not in html
+    assert "y: Math.floor(idx / 4) * 180" not in html

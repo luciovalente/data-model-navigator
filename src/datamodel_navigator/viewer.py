@@ -291,9 +291,6 @@ HTML_TEMPLATE = """<!doctype html>
             highlight: { background: '#dbeafe', border: '#1d4ed8' }
           },
           font: { color: '#0f172a', size: 14 },
-          x: (idx % 4) * 280,
-          y: Math.floor(idx / 4) * 180,
-          physics: false,
         }))
       );
 
@@ -469,6 +466,7 @@ HTML_TEMPLATE = """<!doctype html>
         network.fit({ animation: false });
       });
 
+      setTimeout(() => network.fit({ animation: false }), 80);
       window.addEventListener('resize', () => network.fit({ animation: false }));
     }
   </script>
