@@ -142,6 +142,7 @@ def test_build_ssl_context_uses_custom_bundle(monkeypatch) -> None:
     monkeypatch.setenv("DMN_CA_BUNDLE", "/tmp/company-ca.pem")
     monkeypatch.setattr("datamodel_navigator.llm_guidance.ssl.create_default_context", fake_create_default_context)
 
+    _build_ssl_context(LLMConfig(user_prompt="x"))
     _build_ssl_context()
 
     assert calls == ["/tmp/company-ca.pem"]
@@ -161,4 +162,5 @@ def test_build_ssl_context_insecure_mode(monkeypatch) -> None:
     monkeypatch.setenv("DMN_ALLOW_INSECURE_SSL", "1")
     monkeypatch.setattr("datamodel_navigator.llm_guidance.ssl._create_unverified_context", fake_unverified_context)
 
+    assert _build_ssl_context(LLMConfig(user_prompt="x")) is sentinel
     assert _build_ssl_context() is sentinel

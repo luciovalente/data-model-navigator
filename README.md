@@ -79,7 +79,7 @@ Durante `dmn --phase discover`, i parametri inseriti vengono salvati automaticam
 
 - PostgreSQL: host, porta, dbname, utente, password, schema
 - MongoDB: URI, dbname, sample size
-- LLM: prompt, modello, endpoint, token API, batch size
+- LLM: prompt, modello, endpoint, token API, batch size, flag TLS insicuro (solo emergenza)
 
 Alle esecuzioni successive, se `output/config.json` è presente, la CLI riusa tali valori e non richiede nuovamente gli input interattivi.
 
