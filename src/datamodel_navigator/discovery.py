@@ -4,6 +4,7 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
+from datamodel_navigator.llm_guidance import LLMConfig, apply_llm_guidance
 from datamodel_navigator.models import Attribute, DataModel, Entity
 
 
@@ -115,10 +116,21 @@ def discover_mongo(config: MongoConfig) -> list[Entity]:
     return entities
 
 
-def discover_model(postgres: PostgresConfig | None, mongo: MongoConfig | None) -> DataModel:
+def discover_model(
+    postgres: PostgresConfig | None,
+    mongo: MongoConfig | None,
+    llm_config: LLMConfig | None = None,
+) -> DataModel:
     model = DataModel(metadata={"version": 1})
     if postgres is not None:
         model.entities.extend(discover_postgres(postgres))
     if mongo is not None:
         model.entities.extend(discover_mongo(mongo))
+
+    if llm_config is not None and llm_config.user_prompt.strip():
+        guidance = apply_llm_guidance(model.entities, llm_config)
+        model.metadata["interpretation_prompt"] = llm_config.user_prompt
+        model.metadata["interpretation_instructions"] = guidance.instructions
+        model.metadata["llm_batches"] = len(guidance.raw_responses)
+
     return model

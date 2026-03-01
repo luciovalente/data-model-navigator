@@ -7,6 +7,7 @@ Tool locale (CLI) per:
 3. applicare una fase di configurazione (pulizia automatica + intervento manuale);
 4. proporre/aggiungere relazioni anche cross-db (Mongo ↔ PostgreSQL);
 5. generare un viewer **E/R navigabile** in HTML.
+6. opzionalmente applicare un prompt LLM iniziale per regole di interpretazione semantica.
 
 ## Installazione
 
@@ -31,6 +32,8 @@ Fasi dirette:
 ```bash
 dmn --phase discover
 # genera output/model.json
+# opzionale: durante la fase discovery puoi inserire un prompt LLM
+# per ottenere regole di interpretazione e tag entità senza chiamate per-record
 
 dmn --phase curate
 # pulizia + suggerimenti relazioni + eventuale input manuale
@@ -49,6 +52,13 @@ dmn --phase viewer --open-browser
   - Mongo→Postgres
   - Postgres→Mongo
   - Postgres→Postgres
+
+## Prompt LLM di interpretazione (opzionale, in discovery)
+
+- Puoi inserire un prompt descrittivo prima dell'analisi (es. tabelle polimorfiche, gerarchie in collection).
+- Il sistema esegue **una sola chiamata LLM** su tutto lo schema, oppure una chiamata per batch di entità.
+- Le istruzioni restituite vengono salvate in `metadata.interpretation_instructions` nel JSON modello.
+- Non viene chiamato l'LLM per ogni record/documento.
 
 ## Demo rapida senza DB
 
