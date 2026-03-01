@@ -1,6 +1,6 @@
 from datamodel_navigator.discovery import discover_model
-from datamodel_navigator.llm_guidance import LLMConfig, analyze_entity_samples, apply_llm_guidance
-from datamodel_navigator.models import Attribute, Entity
+from datamodel_navigator.llm_guidance import LLMConfig, analyze_entity_samples, apply_llm_guidance, correct_data_model_json
+from datamodel_navigator.models import Attribute, DataModel, Entity
 
 
 def test_apply_llm_guidance_single_call_with_tags_and_notes() -> None:
@@ -72,3 +72,35 @@ def test_analyze_entity_samples_returns_insights() -> None:
 
     assert len(calls) == 1
     assert insights == ["Campo type discrimina sottotipi"]
+
+
+def test_correct_data_model_json_returns_corrected_model() -> None:
+    model = DataModel(
+        entities=[
+            Entity(
+                id="pg:orders",
+                name="orders",
+                source_system="postgres",
+                source_type="table",
+                attributes=[Attribute(name="id", type="uuid", nullable=False)],
+            )
+        ],
+        relationships=[],
+        metadata={"source": "test"},
+    )
+
+    calls = []
+
+    def fake_call(payload, _config):
+        calls.append(payload)
+        return (
+            '{"model": {"entities": [{"id": "pg:orders", "name": "orders", "source_system": "postgres", '
+            '"source_type": "table", "attributes": [{"name": "id", "type": "uuid", "nullable": false, "source": ""}], '
+            '"tags": ["validated"]}], "relationships": [], "metadata": {"source": "test", "fixed": true}}}'
+        )
+
+    corrected = correct_data_model_json(model, LLMConfig(user_prompt="correggi"), call_llm=fake_call)
+
+    assert len(calls) == 1
+    assert corrected.metadata["fixed"] is True
+    assert corrected.entities[0].tags == ["validated"]

@@ -6,8 +6,9 @@ Tool locale (CLI) per:
 2. estrarre entità/campi e salvarli in JSON;
 3. applicare una fase di configurazione (pulizia automatica + intervento manuale);
 4. proporre/aggiungere relazioni anche cross-db (Mongo ↔ PostgreSQL);
-5. generare un viewer **E/R navigabile** in HTML.
-6. opzionalmente applicare un prompt LLM iniziale per regole di interpretazione semantica.
+5. generare un viewer **E/R navigabile** in HTML;
+6. correggere il JSON del modello dati con supporto LLM e prompt guidato;
+7. opzionalmente applicare un prompt LLM iniziale per regole di interpretazione semantica.
 
 ## Installazione
 
@@ -40,6 +41,9 @@ dmn --phase curate
 
 dmn --phase viewer --open-browser
 # genera output/viewer.html
+
+dmn --phase fix-json
+# chiede un prompt di correzione e usa l'LLM per aggiornare output/model.json
 ```
 
 ## Fase di configurazione (pulizia e relazioni)
@@ -52,6 +56,14 @@ dmn --phase viewer --open-browser
   - Mongo→Postgres
   - Postgres→Mongo
   - Postgres→Postgres
+
+
+## Correzione JSON modello dati (nuova fase)
+
+- Esegui `dmn --phase fix-json` dopo discovery/curation.
+- La CLI chiede un prompt (es. "uniforma naming, correggi relazioni mancanti, rinomina entità duplicate").
+- Con supporto LLM viene prodotto un JSON corretto e salvato in `output/model.json`.
+- L'output deve rispettare la struttura del modello (`entities`, `relationships`, `metadata`).
 
 ## Prompt LLM di interpretazione (opzionale, in discovery)
 
