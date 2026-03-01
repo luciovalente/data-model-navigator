@@ -8,6 +8,7 @@ from pathlib import Path
 from datamodel_navigator.curation import add_manual_relationship, auto_cleanup, find_entity, suggest_relationships
 from datamodel_navigator.discovery import MongoConfig, PostgresConfig, discover_model
 from datamodel_navigator.io_utils import load_model, save_model
+from datamodel_navigator.llm_guidance import LLMConfig
 from datamodel_navigator.viewer import write_viewer
 
 DEFAULT_MODEL = Path("output/model.json")
@@ -42,7 +43,19 @@ def phase_discovery() -> None:
             sample_size=int(ask("Mongo sample size", "200")),
         )
 
-    model = discover_model(pg, mg)
+    llm_config = None
+    use_llm_guidance = ask("Caricare prompt di interpretazione LLM? (y/n)", "n").lower() == "y"
+    if use_llm_guidance:
+        prompt = ask("Prompt interpretazione")
+        batch_size = int(
+            ask(
+                "Batch size entità per chiamata LLM (0 = chiamata unica su tutto lo schema)",
+                "0",
+            )
+        )
+        llm_config = LLMConfig(user_prompt=prompt, batch_size=batch_size)
+
+    model = discover_model(pg, mg, llm_config=llm_config)
     save_model(model, DEFAULT_MODEL)
     print(f"Modello scoperto e salvato in {DEFAULT_MODEL}")
 
