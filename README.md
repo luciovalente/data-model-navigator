@@ -114,6 +114,16 @@ dmn --phase discover
 
 `DMN_CA_BUNDLE` ha priorità e viene usata dalle chiamate LLM del tool.
 
+Perché succede anche con una "semplice" API LLM?
+- Tutte le API LLM usano HTTPS/TLS: Python deve verificare la catena certificati del server.
+- In alcune reti aziendali un proxy intercetta TLS e sostituisce il certificato con uno interno: se la CA aziendale non è trusted da Python, la verifica fallisce.
+- Su alcune installazioni locali (soprattutto Python installato manualmente), lo store CA può essere incompleto/non aggiornato.
+
+Dove trovare il file PEM?
+- Ambiente aziendale: chiedi al team IT/security il certificato **root/intermedio** del proxy HTTPS in formato `.pem`.
+- Se hai solo `.crt`/`.cer`, spesso è già PEM (testo con `-----BEGIN CERTIFICATE-----`), altrimenti va convertito.
+- macOS (Python.org): esegui lo script "Install Certificates.command" incluso nell'installazione Python per aggiornare lo store CA.
+
 Se `dmn` risponde `command not found`, hai due opzioni:
 
 ```bash

@@ -6,6 +6,7 @@ import pytest
 from datamodel_navigator.discovery import discover_model
 from datamodel_navigator.llm_guidance import (
     LLMConfig,
+    _build_ssl_context,
     _default_call_llm,
     analyze_entity_samples,
     apply_llm_guidance,
@@ -128,3 +129,18 @@ def test_default_call_llm_wraps_ssl_error(monkeypatch) -> None:
             payload={"model": "x", "messages": []},
             config=LLMConfig(user_prompt="test", api_key="secret"),
         )
+
+
+def test_build_ssl_context_uses_custom_bundle(monkeypatch) -> None:
+    calls = []
+
+    def fake_create_default_context(*, cafile=None):
+        calls.append(cafile)
+        return object()
+
+    monkeypatch.setenv("DMN_CA_BUNDLE", "/tmp/company-ca.pem")
+    monkeypatch.setattr("datamodel_navigator.llm_guidance.ssl.create_default_context", fake_create_default_context)
+
+    _build_ssl_context()
+
+    assert calls == ["/tmp/company-ca.pem"]
