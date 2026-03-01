@@ -143,6 +143,7 @@ def test_build_ssl_context_uses_custom_bundle(monkeypatch) -> None:
     monkeypatch.setattr("datamodel_navigator.llm_guidance.ssl.create_default_context", fake_create_default_context)
 
     _build_ssl_context(LLMConfig(user_prompt="x"))
+    _build_ssl_context()
 
     assert calls == ["/tmp/company-ca.pem"]
 
