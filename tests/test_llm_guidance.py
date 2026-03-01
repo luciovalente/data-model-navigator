@@ -1,5 +1,16 @@
+import ssl
+from urllib.error import URLError
+
+import pytest
+
 from datamodel_navigator.discovery import discover_model
-from datamodel_navigator.llm_guidance import LLMConfig, analyze_entity_samples, apply_llm_guidance, correct_data_model_json
+from datamodel_navigator.llm_guidance import (
+    LLMConfig,
+    _default_call_llm,
+    analyze_entity_samples,
+    apply_llm_guidance,
+    correct_data_model_json,
+)
 from datamodel_navigator.models import Attribute, DataModel, Entity
 
 
@@ -104,3 +115,16 @@ def test_correct_data_model_json_returns_corrected_model() -> None:
     assert len(calls) == 1
     assert corrected.metadata["fixed"] is True
     assert corrected.entities[0].tags == ["validated"]
+
+
+def test_default_call_llm_wraps_ssl_error(monkeypatch) -> None:
+    def fake_urlopen(*_args, **_kwargs):
+        raise URLError(ssl.SSLCertVerificationError("CERTIFICATE_VERIFY_FAILED"))
+
+    monkeypatch.setattr("datamodel_navigator.llm_guidance.request.urlopen", fake_urlopen)
+
+    with pytest.raises(RuntimeError, match="DMN_CA_BUNDLE"):
+        _default_call_llm(
+            payload={"model": "x", "messages": []},
+            config=LLMConfig(user_prompt="test", api_key="secret"),
+        )

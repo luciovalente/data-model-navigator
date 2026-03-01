@@ -95,6 +95,25 @@ python -m http.server 8000
 
 ## Risoluzione problemi
 
+### Errore LLM SSL: `CERTIFICATE_VERIFY_FAILED`
+
+Se durante una chiamata LLM compare un errore SSL tipo:
+
+`CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate`
+
+significa che Python non riesce a validare il certificato HTTPS dell'endpoint (tipico in reti aziendali con proxy/TLS inspection).
+
+Imposta il percorso del bundle CA aziendale (formato PEM) prima di eseguire `dmn`:
+
+```bash
+export DMN_CA_BUNDLE=/percorso/ca-azienda.pem
+# alternativa compatibile con Python/OpenSSL
+export SSL_CERT_FILE=/percorso/ca-azienda.pem
+dmn --phase discover
+```
+
+`DMN_CA_BUNDLE` ha priorità e viene usata dalle chiamate LLM del tool.
+
 Se `dmn` risponde `command not found`, hai due opzioni:
 
 ```bash
