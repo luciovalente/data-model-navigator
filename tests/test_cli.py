@@ -8,7 +8,7 @@ def test_save_and_load_config_roundtrip(tmp_path: Path) -> None:
     payload = {
         "postgres": {"host": "localhost", "port": 5432, "dbname": "postgres", "user": "postgres", "password": "secret", "schema": "public"},
         "mongo": {"uri": "mongodb://localhost:27017", "dbname": "test", "sample_size": 200},
-        "llm": {"user_prompt": "prompt", "model": "gpt-4o-mini", "endpoint": "https://api.openai.com/v1/chat/completions", "api_key": "tok", "batch_size": 0},
+        "llm": {"user_prompt": "prompt", "model": "gpt-4o-mini", "endpoint": "https://api.openai.com/v1/chat/completions", "api_key": "tok", "batch_size": 0, "allow_insecure_ssl": False},
     }
 
     cli.save_config(payload, path)
@@ -36,6 +36,7 @@ def test_phase_discovery_uses_saved_config_without_prompting(monkeypatch, tmp_pa
                 "endpoint": "https://api.openai.com/v1/chat/completions",
                 "api_key": "token-123",
                 "batch_size": 0,
+                "allow_insecure_ssl": False,
             },
         },
         config_path,
@@ -79,7 +80,7 @@ def test_phase_fix_json_model_applies_llm_corrections(monkeypatch, tmp_path: Pat
     model_path = tmp_path / "model.json"
     monkeypatch.setattr(cli, "DEFAULT_MODEL", model_path)
 
-    answers = iter(["correggi modello", "gpt-4o-mini", "token-123"])
+    answers = iter(["correggi modello", "gpt-4o-mini", "token-123", "y"])
 
     def fake_ask(_prompt: str, default: str | None = None) -> str:
         return next(answers, default or "")
@@ -110,5 +111,6 @@ def test_phase_fix_json_model_applies_llm_corrections(monkeypatch, tmp_path: Pat
     assert captured["model"].marker == "source"
     assert captured["llm"].user_prompt == "correggi modello"
     assert captured["llm"].api_key == "token-123"
+    assert captured["llm"].allow_insecure_ssl is True
     assert saved["model"] is corrected_model
     assert saved["path"] == model_path

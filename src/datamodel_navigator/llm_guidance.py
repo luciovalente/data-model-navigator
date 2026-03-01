@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
+import ssl
 from dataclasses import dataclass
 from typing import Any, Callable
 from urllib import request
+from urllib.error import URLError
 
 from datamodel_navigator.models import DataModel, Entity
 
@@ -16,6 +19,7 @@ class LLMConfig:
     endpoint: str = "https://api.openai.com/v1/chat/completions"
     api_key: str | None = None
     batch_size: int = 0
+    allow_insecure_ssl: bool = False
 
 
 @dataclass
@@ -26,6 +30,41 @@ class LLMGuidanceResult:
 
 LLMCaller = Callable[[dict[str, Any], LLMConfig], str]
 
+
+def _env_truthy(name: str) -> bool:
+    value = os.getenv(name, "").strip().lower()
+    return value in {"1", "true", "yes", "on"}
+
+
+def _build_ssl_context(config: LLMConfig | None = None) -> ssl.SSLContext:
+    """Crea il contesto SSL con supporto a CA bundle custom e fallback certifi."""
+    allow_insecure = bool(config and config.allow_insecure_ssl)
+    if allow_insecure or _env_truthy("DMN_ALLOW_INSECURE_SSL"):
+        return ssl._create_unverified_context()
+
+    ca_bundle_path = os.getenv("DMN_CA_BUNDLE") or os.getenv("SSL_CERT_FILE")
+    if ca_bundle_path:
+        return ssl.create_default_context(cafile=ca_bundle_path)
+
+    # Fallback utile su ambienti dove lo store certificati di sistema non è allineato.
+    certifi_spec = importlib.util.find_spec("certifi")
+    if certifi_spec is not None:
+        certifi = __import__("certifi")
+        return ssl.create_default_context(cafile=certifi.where())
+
+    return ssl.create_default_context()
+
+
+def _ssl_help_message() -> str:
+    return (
+        "Connessione HTTPS verso endpoint LLM fallita: certificato non verificabile. "
+        "Questo accade spesso con proxy/TLS inspection aziendali o store CA locali non aggiornati. "
+        "Se hai il certificato CA aziendale in PEM, imposta DMN_CA_BUNDLE "
+        "(o SSL_CERT_FILE) con il suo percorso. "
+        "Se non sai dove trovarlo, chiedi all'IT il certificato root/intermedio del proxy HTTPS. "
+        "Solo come ultima risorsa temporanea in ambiente non produttivo puoi impostare "
+        "DMN_ALLOW_INSECURE_SSL=1 per disabilitare la verifica certificato."
+    )
 
 def _default_call_llm(payload: dict[str, Any], config: LLMConfig) -> str:
     api_key = config.api_key or os.getenv("OPENAI_API_KEY")
@@ -42,8 +81,17 @@ def _default_call_llm(payload: dict[str, Any], config: LLMConfig) -> str:
         method="POST",
     )
 
-    with request.urlopen(req, timeout=30) as resp:  # noqa: S310
-        body = resp.read().decode("utf-8")
+    ssl_context = _build_ssl_context(config)
+
+    try:
+        with request.urlopen(req, timeout=30, context=ssl_context) as resp:  # noqa: S310
+            body = resp.read().decode("utf-8")
+    except URLError as exc:
+        message = str(exc)
+        if "CERTIFICATE_VERIFY_FAILED" in message:
+            raise RuntimeError(_ssl_help_message()) from exc
+        raise
+
     parsed = json.loads(body)
     return parsed["choices"][0]["message"]["content"]
 

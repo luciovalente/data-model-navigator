@@ -1,5 +1,18 @@
+import ssl
+from urllib.error import URLError
+
+import pytest
+
 from datamodel_navigator.discovery import discover_model
-from datamodel_navigator.llm_guidance import LLMConfig, analyze_entity_samples, apply_llm_guidance, correct_data_model_json
+from datamodel_navigator.llm_guidance import (
+    LLMConfig,
+    _build_ssl_context,
+    _default_call_llm,
+    _env_truthy,
+    analyze_entity_samples,
+    apply_llm_guidance,
+    correct_data_model_json,
+)
 from datamodel_navigator.models import Attribute, DataModel, Entity
 
 
@@ -104,3 +117,61 @@ def test_correct_data_model_json_returns_corrected_model() -> None:
     assert len(calls) == 1
     assert corrected.metadata["fixed"] is True
     assert corrected.entities[0].tags == ["validated"]
+
+
+def test_default_call_llm_wraps_ssl_error(monkeypatch) -> None:
+    def fake_urlopen(*_args, **_kwargs):
+        raise URLError(ssl.SSLCertVerificationError("CERTIFICATE_VERIFY_FAILED"))
+
+    monkeypatch.setattr("datamodel_navigator.llm_guidance.request.urlopen", fake_urlopen)
+
+    with pytest.raises(RuntimeError, match="DMN_CA_BUNDLE"):
+        _default_call_llm(
+            payload={"model": "x", "messages": []},
+            config=LLMConfig(user_prompt="test", api_key="secret"),
+        )
+
+
+def test_build_ssl_context_uses_custom_bundle(monkeypatch) -> None:
+    calls = []
+
+    def fake_create_default_context(*, cafile=None):
+        calls.append(cafile)
+        return object()
+
+    monkeypatch.setenv("DMN_CA_BUNDLE", "/tmp/company-ca.pem")
+    monkeypatch.setattr("datamodel_navigator.llm_guidance.ssl.create_default_context", fake_create_default_context)
+
+    _build_ssl_context(LLMConfig(user_prompt="x"))
+
+    assert calls == ["/tmp/company-ca.pem"]
+
+
+def test_env_truthy_recognizes_common_values(monkeypatch) -> None:
+    monkeypatch.setenv("DMN_ALLOW_INSECURE_SSL", "yes")
+    assert _env_truthy("DMN_ALLOW_INSECURE_SSL") is True
+
+
+def test_build_ssl_context_insecure_mode(monkeypatch) -> None:
+    sentinel = object()
+
+    def fake_unverified_context():
+        return sentinel
+
+    monkeypatch.setenv("DMN_ALLOW_INSECURE_SSL", "1")
+    monkeypatch.setattr("datamodel_navigator.llm_guidance.ssl._create_unverified_context", fake_unverified_context)
+
+    assert _build_ssl_context(LLMConfig(user_prompt="x")) is sentinel
+
+
+
+def test_build_ssl_context_without_config_uses_env_override(monkeypatch) -> None:
+    sentinel = object()
+
+    def fake_unverified_context():
+        return sentinel
+
+    monkeypatch.setenv("DMN_ALLOW_INSECURE_SSL", "1")
+    monkeypatch.setattr("datamodel_navigator.llm_guidance.ssl._create_unverified_context", fake_unverified_context)
+
+    assert _build_ssl_context() is sentinel
