@@ -90,7 +90,14 @@ def phase_discovery() -> None:
                     "0",
                 )
             )
-            llm_config = LLMConfig(user_prompt=prompt, model=model, api_key=api_key, batch_size=batch_size)
+            allow_insecure_ssl = ask("Disabilitare verifica TLS LLM (solo emergenza)? (y/n)", "n").lower() == "y"
+            llm_config = LLMConfig(
+                user_prompt=prompt,
+                model=model,
+                api_key=api_key,
+                batch_size=batch_size,
+                allow_insecure_ssl=allow_insecure_ssl,
+            )
 
     config_to_save = {
         "postgres": asdict(pg) if pg else None,
@@ -172,6 +179,7 @@ def phase_fix_json_model() -> None:
         user_prompt=prompt,
         model=ask("Modello LLM", "gpt-4o-mini"),
         api_key=ask("Token API LLM"),
+        allow_insecure_ssl=ask("Disabilitare verifica TLS LLM (solo emergenza)? (y/n)", "n").lower() == "y",
     )
 
     corrected = correct_data_model_json(model, llm_config)
