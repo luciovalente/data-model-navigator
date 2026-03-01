@@ -69,6 +69,12 @@ def _default_call_llm(payload: dict[str, Any], config: LLMConfig) -> str:
     )
 
     ssl_context = _build_ssl_context()
+    ssl_context = ssl.create_default_context()
+
+    # Permette di specificare un bundle certificati custom in ambienti aziendali/proxy.
+    ca_bundle_path = os.getenv("DMN_CA_BUNDLE") or os.getenv("SSL_CERT_FILE")
+    if ca_bundle_path:
+        ssl_context.load_verify_locations(cafile=ca_bundle_path)
 
     try:
         with request.urlopen(req, timeout=30, context=ssl_context) as resp:  # noqa: S310
@@ -77,6 +83,11 @@ def _default_call_llm(payload: dict[str, Any], config: LLMConfig) -> str:
         message = str(exc)
         if "CERTIFICATE_VERIFY_FAILED" in message:
             raise RuntimeError(_ssl_help_message()) from exc
+            raise RuntimeError(
+                "Connessione HTTPS verso endpoint LLM fallita: certificato non verificabile. "
+                "Se sei dietro proxy/certificato aziendale, imposta DMN_CA_BUNDLE "
+                "(o SSL_CERT_FILE) al percorso del file PEM della CA locale."
+            ) from exc
         raise
 
     parsed = json.loads(body)
