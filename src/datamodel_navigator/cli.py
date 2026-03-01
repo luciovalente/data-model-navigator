@@ -9,7 +9,7 @@ from pathlib import Path
 from datamodel_navigator.curation import add_manual_relationship, auto_cleanup, find_entity, suggest_relationships
 from datamodel_navigator.discovery import MongoConfig, PostgresConfig, discover_model
 from datamodel_navigator.io_utils import load_model, save_model
-from datamodel_navigator.llm_guidance import LLMConfig
+from datamodel_navigator.llm_guidance import LLMConfig, correct_data_model_json
 from datamodel_navigator.viewer import write_viewer
 
 DEFAULT_MODEL = Path("output/model.json")
@@ -158,6 +158,26 @@ def phase_viewer(open_browser: bool = False) -> None:
         webbrowser.open(out.resolve().as_uri())
 
 
+
+def phase_fix_json_model() -> None:
+    print("\n== Fase 4: Correggi json modello dati ==")
+    model = load_model(DEFAULT_MODEL)
+
+    prompt = ask("Prompt correzione JSON modello dati")
+    if not prompt.strip():
+        print("Prompt vuoto: nessuna correzione applicata.")
+        return
+
+    llm_config = LLMConfig(
+        user_prompt=prompt,
+        model=ask("Modello LLM", "gpt-4o-mini"),
+        api_key=ask("Token API LLM"),
+    )
+
+    corrected = correct_data_model_json(model, llm_config)
+    save_model(corrected, DEFAULT_MODEL)
+    print(f"Modello corretto e salvato in {DEFAULT_MODEL}")
+
 def phase_show_json() -> None:
     model = load_model(DEFAULT_MODEL)
     print(json.dumps(model.to_dict(), indent=2, ensure_ascii=False))
@@ -168,7 +188,8 @@ def interactive_menu() -> None:
         "1": ("Discovery da PostgreSQL/Mongo", phase_discovery),
         "2": ("Configurazione: pulizia + relazioni", phase_curation),
         "3": ("Genera viewer E/R", phase_viewer),
-        "4": ("Mostra JSON modello", phase_show_json),
+        "4": ("Correggi json modello dati", phase_fix_json_model),
+        "5": ("Mostra JSON modello", phase_show_json),
     }
 
     while True:
@@ -199,7 +220,7 @@ def interactive_menu() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Data Model Navigator")
     parser.add_argument("--menu", action="store_true", help="Avvia menu interattivo")
-    parser.add_argument("--phase", choices=["discover", "curate", "viewer", "json"])
+    parser.add_argument("--phase", choices=["discover", "curate", "viewer", "fix-json", "json"])
     parser.add_argument("--open-browser", action="store_true")
     args = parser.parse_args()
 
@@ -213,6 +234,8 @@ def main() -> None:
         phase_curation()
     elif args.phase == "viewer":
         phase_viewer(open_browser=args.open_browser)
+    elif args.phase == "fix-json":
+        phase_fix_json_model()
     elif args.phase == "json":
         phase_show_json()
 

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 from urllib import request
 
-from datamodel_navigator.models import Entity
+from datamodel_navigator.models import DataModel, Entity
 
 
 @dataclass
@@ -194,3 +194,44 @@ def analyze_entity_samples(
     response_text = caller(payload, config)
     parsed = _extract_json_block(response_text)
     return [str(x) for x in parsed.get("insights", []) if str(x).strip()]
+
+
+def correct_data_model_json(
+    model: DataModel,
+    config: LLMConfig,
+    call_llm: LLMCaller | None = None,
+) -> DataModel:
+    """Richiede all'LLM una versione corretta del JSON modello dati."""
+    caller = call_llm or _default_call_llm
+    current_json = json.dumps(model.to_dict(), ensure_ascii=False)
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "Sei un assistente di data modeling. Ricevi il JSON di un modello dati e un prompt utente "
+                "con richieste di correzione. Rispondi SOLO con JSON valido nel formato "
+                '{"model": {"entities": [], "relationships": [], "metadata": {}}}. '
+                "Mantieni i campi presenti nello schema e applica solo correzioni coerenti con il prompt."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Prompt utente:\n{config.user_prompt}\n\n"
+                f"JSON modello corrente:\n{current_json}"
+            ),
+        },
+    ]
+    payload = {
+        "model": config.model,
+        "temperature": 0,
+        "response_format": {"type": "json_object"},
+        "messages": messages,
+    }
+    response_text = caller(payload, config)
+    parsed = _extract_json_block(response_text)
+    corrected_model_payload = parsed.get("model")
+    if not isinstance(corrected_model_payload, dict):
+        raise ValueError("Risposta LLM non valida: campo 'model' mancante o non oggetto JSON")
+
+    return DataModel.from_dict(corrected_model_payload)
