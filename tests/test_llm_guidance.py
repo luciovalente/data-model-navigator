@@ -163,4 +163,16 @@ def test_build_ssl_context_insecure_mode(monkeypatch) -> None:
     monkeypatch.setattr("datamodel_navigator.llm_guidance.ssl._create_unverified_context", fake_unverified_context)
 
     assert _build_ssl_context(LLMConfig(user_prompt="x")) is sentinel
+
+
+
+def test_build_ssl_context_without_config_uses_env_override(monkeypatch) -> None:
+    sentinel = object()
+
+    def fake_unverified_context():
+        return sentinel
+
+    monkeypatch.setenv("DMN_ALLOW_INSECURE_SSL", "1")
+    monkeypatch.setattr("datamodel_navigator.llm_guidance.ssl._create_unverified_context", fake_unverified_context)
+
     assert _build_ssl_context() is sentinel
