@@ -29,6 +29,29 @@ class LLMGuidanceResult:
 
 LLMCaller = Callable[[dict[str, Any], LLMConfig], str]
 
+def _build_ssl_context() -> ssl.SSLContext:
+    """Crea il contesto SSL con supporto a CA bundle custom e fallback certifi."""
+    ca_bundle_path = os.getenv("DMN_CA_BUNDLE") or os.getenv("SSL_CERT_FILE")
+    if ca_bundle_path:
+        return ssl.create_default_context(cafile=ca_bundle_path)
+
+    # Fallback utile su ambienti dove lo store certificati di sistema non è allineato.
+    certifi_spec = importlib.util.find_spec("certifi")
+    if certifi_spec is not None:
+        certifi = __import__("certifi")
+        return ssl.create_default_context(cafile=certifi.where())
+
+    return ssl.create_default_context()
+
+
+def _ssl_help_message() -> str:
+    return (
+        "Connessione HTTPS verso endpoint LLM fallita: certificato non verificabile. "
+        "Questo accade spesso con proxy/TLS inspection aziendali o store CA locali non aggiornati. "
+        "Se hai il certificato CA aziendale in PEM, imposta DMN_CA_BUNDLE "
+        "(o SSL_CERT_FILE) con il suo percorso. "
+        "Se non sai dove trovarlo, chiedi all'IT il certificato root/intermedio del proxy HTTPS."
+    )
 
 def _env_truthy(name: str) -> bool:
     value = os.getenv(name, "").strip().lower()
@@ -80,6 +103,12 @@ def _default_call_llm(payload: dict[str, Any], config: LLMConfig) -> str:
     )
 
     ssl_context = _build_ssl_context()
+    ssl_context = ssl.create_default_context()
+
+    # Permette di specificare un bundle certificati custom in ambienti aziendali/proxy.
+    ca_bundle_path = os.getenv("DMN_CA_BUNDLE") or os.getenv("SSL_CERT_FILE")
+    if ca_bundle_path:
+        ssl_context.load_verify_locations(cafile=ca_bundle_path)
 
     try:
         with request.urlopen(req, timeout=30, context=ssl_context) as resp:  # noqa: S310
@@ -88,6 +117,11 @@ def _default_call_llm(payload: dict[str, Any], config: LLMConfig) -> str:
         message = str(exc)
         if "CERTIFICATE_VERIFY_FAILED" in message:
             raise RuntimeError(_ssl_help_message()) from exc
+            raise RuntimeError(
+                "Connessione HTTPS verso endpoint LLM fallita: certificato non verificabile. "
+                "Se sei dietro proxy/certificato aziendale, imposta DMN_CA_BUNDLE "
+                "(o SSL_CERT_FILE) al percorso del file PEM della CA locale."
+            ) from exc
         raise
 
     parsed = json.loads(body)
