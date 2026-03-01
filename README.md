@@ -60,6 +60,17 @@ dmn --phase viewer --open-browser
 - Le istruzioni restituite vengono salvate in `metadata.interpretation_instructions` nel JSON modello.
 - Non viene chiamato l'LLM per ogni record/documento.
 
+
+## Configurazione persistente CLI
+
+Durante `dmn --phase discover`, i parametri inseriti vengono salvati automaticamente in `output/config.json`:
+
+- PostgreSQL: host, porta, dbname, utente, password, schema
+- MongoDB: URI, dbname, sample size
+- LLM: prompt, modello, endpoint, token API, batch size
+
+Alle esecuzioni successive, se `output/config.json` è presente, la CLI riusa tali valori e non richiede nuovamente gli input interattivi.
+
 ## Demo rapida senza DB
 
 ```bash

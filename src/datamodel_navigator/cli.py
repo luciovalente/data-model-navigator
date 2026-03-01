@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import webbrowser
+from dataclasses import asdict
 from pathlib import Path
 
 from datamodel_navigator.curation import add_manual_relationship, auto_cleanup, find_entity, suggest_relationships
@@ -12,6 +13,7 @@ from datamodel_navigator.llm_guidance import LLMConfig
 from datamodel_navigator.viewer import write_viewer
 
 DEFAULT_MODEL = Path("output/model.json")
+DEFAULT_CONFIG = Path("output/config.json")
 
 
 def ask(prompt: str, default: str | None = None) -> str:
@@ -20,40 +22,83 @@ def ask(prompt: str, default: str | None = None) -> str:
     return value or (default or "")
 
 
+def load_saved_config(path: Path | None = None) -> dict:
+    target = path or DEFAULT_CONFIG
+    if not target.exists():
+        return {}
+    return json.loads(target.read_text(encoding="utf-8"))
+
+
+def save_config(config: dict, path: Path | None = None) -> None:
+    target = path or DEFAULT_CONFIG
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
 def phase_discovery() -> None:
     print("\n== Fase 1: Connessione e discovery ==")
-    use_pg = ask("Connettere PostgreSQL? (y/n)", "y").lower() == "y"
-    use_mg = ask("Connettere MongoDB? (y/n)", "y").lower() == "y"
+    saved_config = load_saved_config()
+
+    if saved_config:
+        print(f"Configurazione trovata in {DEFAULT_CONFIG}: uso i parametri salvati.")
+
+    use_pg = bool(saved_config.get("postgres"))
+    use_mg = bool(saved_config.get("mongo"))
+
+    if not saved_config:
+        use_pg = ask("Connettere PostgreSQL? (y/n)", "y").lower() == "y"
+        use_mg = ask("Connettere MongoDB? (y/n)", "y").lower() == "y"
 
     pg = None
     mg = None
     if use_pg:
-        pg = PostgresConfig(
-            host=ask("PG host", "localhost"),
-            port=int(ask("PG porta", "5432")),
-            dbname=ask("PG dbname", "postgres"),
-            user=ask("PG user", "postgres"),
-            password=ask("PG password", "postgres"),
-            schema=ask("PG schema", "public"),
-        )
+        if saved_config.get("postgres"):
+            pg = PostgresConfig(**saved_config["postgres"])
+        else:
+            pg = PostgresConfig(
+                host=ask("PG host", "localhost"),
+                port=int(ask("PG porta", "5432")),
+                dbname=ask("PG dbname", "postgres"),
+                user=ask("PG user", "postgres"),
+                password=ask("PG password", "postgres"),
+                schema=ask("PG schema", "public"),
+            )
     if use_mg:
-        mg = MongoConfig(
-            uri=ask("Mongo URI", "mongodb://localhost:27017"),
-            dbname=ask("Mongo dbname", "test"),
-            sample_size=int(ask("Mongo sample size", "200")),
-        )
+        if saved_config.get("mongo"):
+            mg = MongoConfig(**saved_config["mongo"])
+        else:
+            mg = MongoConfig(
+                uri=ask("Mongo URI", "mongodb://localhost:27017"),
+                dbname=ask("Mongo dbname", "test"),
+                sample_size=int(ask("Mongo sample size", "200")),
+            )
 
     llm_config = None
-    use_llm_guidance = ask("Caricare prompt di interpretazione LLM? (y/n)", "n").lower() == "y"
+    use_llm_guidance = bool(saved_config.get("llm"))
+    if not saved_config:
+        use_llm_guidance = ask("Caricare prompt di interpretazione LLM? (y/n)", "n").lower() == "y"
     if use_llm_guidance:
-        prompt = ask("Prompt interpretazione")
-        batch_size = int(
-            ask(
-                "Batch size entità per chiamata LLM (0 = chiamata unica su tutto lo schema)",
-                "0",
+        if saved_config.get("llm"):
+            llm_config = LLMConfig(**saved_config["llm"])
+        else:
+            prompt = ask("Prompt interpretazione")
+            model = ask("Modello LLM", "gpt-4o-mini")
+            api_key = ask("Token API LLM")
+            batch_size = int(
+                ask(
+                    "Batch size entità per chiamata LLM (0 = chiamata unica su tutto lo schema)",
+                    "0",
+                )
             )
-        )
-        llm_config = LLMConfig(user_prompt=prompt, batch_size=batch_size)
+            llm_config = LLMConfig(user_prompt=prompt, model=model, api_key=api_key, batch_size=batch_size)
+
+    config_to_save = {
+        "postgres": asdict(pg) if pg else None,
+        "mongo": asdict(mg) if mg else None,
+        "llm": asdict(llm_config) if llm_config else None,
+    }
+    save_config(config_to_save)
+    print(f"Configurazione salvata in {DEFAULT_CONFIG}")
 
     model = discover_model(pg, mg, llm_config=llm_config)
     save_model(model, DEFAULT_MODEL)
