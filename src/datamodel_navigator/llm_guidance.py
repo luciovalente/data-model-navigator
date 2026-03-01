@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import os
+import ssl
 from dataclasses import dataclass
 from typing import Any, Callable
 from urllib import request
+from urllib.error import URLError
 
 from datamodel_navigator.models import DataModel, Entity
 
@@ -42,8 +44,26 @@ def _default_call_llm(payload: dict[str, Any], config: LLMConfig) -> str:
         method="POST",
     )
 
-    with request.urlopen(req, timeout=30) as resp:  # noqa: S310
-        body = resp.read().decode("utf-8")
+    ssl_context = ssl.create_default_context()
+
+    # Permette di specificare un bundle certificati custom in ambienti aziendali/proxy.
+    ca_bundle_path = os.getenv("DMN_CA_BUNDLE") or os.getenv("SSL_CERT_FILE")
+    if ca_bundle_path:
+        ssl_context.load_verify_locations(cafile=ca_bundle_path)
+
+    try:
+        with request.urlopen(req, timeout=30, context=ssl_context) as resp:  # noqa: S310
+            body = resp.read().decode("utf-8")
+    except URLError as exc:
+        message = str(exc)
+        if "CERTIFICATE_VERIFY_FAILED" in message:
+            raise RuntimeError(
+                "Connessione HTTPS verso endpoint LLM fallita: certificato non verificabile. "
+                "Se sei dietro proxy/certificato aziendale, imposta DMN_CA_BUNDLE "
+                "(o SSL_CERT_FILE) al percorso del file PEM della CA locale."
+            ) from exc
+        raise
+
     parsed = json.loads(body)
     return parsed["choices"][0]["message"]["content"]
 
