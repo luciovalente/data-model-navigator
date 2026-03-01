@@ -1,5 +1,5 @@
 from datamodel_navigator.discovery import discover_model
-from datamodel_navigator.llm_guidance import LLMConfig, apply_llm_guidance
+from datamodel_navigator.llm_guidance import LLMConfig, analyze_entity_samples, apply_llm_guidance
 from datamodel_navigator.models import Attribute, Entity
 
 
@@ -53,3 +53,22 @@ def test_apply_llm_guidance_batching() -> None:
 def test_discover_model_without_sources_keeps_empty_entities() -> None:
     model = discover_model(postgres=None, mongo=None)
     assert model.entities == []
+
+
+def test_analyze_entity_samples_returns_insights() -> None:
+    calls = []
+
+    def fake_call(payload, _config):
+        calls.append(payload)
+        return '{"insights": ["Campo type discrimina sottotipi"]}'
+
+    insights = analyze_entity_samples(
+        entity_name="orders",
+        entity_source="postgres",
+        samples=[{"id": 1, "type": "retail"}],
+        config=LLMConfig(user_prompt="trova varianti"),
+        call_llm=fake_call,
+    )
+
+    assert len(calls) == 1
+    assert insights == ["Campo type discrimina sottotipi"]

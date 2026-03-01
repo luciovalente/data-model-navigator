@@ -101,6 +101,17 @@ def phase_discovery() -> None:
     print(f"Configurazione salvata in {DEFAULT_CONFIG}")
 
     model = discover_model(pg, mg, llm_config=llm_config)
+
+    metadata = getattr(model, "metadata", {})
+    for step in metadata.get("discovery_log", []):
+        print(step)
+
+    count_log = metadata.get("discovery_count_log", [])
+    if count_log:
+        print("\nLog finale discovery (volumi per entità):")
+        for line in count_log:
+            print(f"- {line}")
+
     save_model(model, DEFAULT_MODEL)
     print(f"Modello scoperto e salvato in {DEFAULT_MODEL}")
 
