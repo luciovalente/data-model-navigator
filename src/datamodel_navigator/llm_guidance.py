@@ -150,3 +150,47 @@ def apply_llm_guidance(
 
     unique_instructions = list(dict.fromkeys(all_instructions))
     return LLMGuidanceResult(instructions=unique_instructions, raw_responses=raw_responses)
+
+
+def analyze_entity_samples(
+    *,
+    entity_name: str,
+    entity_source: str,
+    samples: list[dict[str, Any]],
+    config: LLMConfig,
+    call_llm: LLMCaller | None = None,
+) -> list[str]:
+    """Richiede all'LLM osservazioni sui record anonimizzati di una entità."""
+    if not samples:
+        return []
+
+    caller = call_llm or _default_call_llm
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "Sei un assistente di data modeling. Ricevi record già anonimizzati di una tabella/collection. "
+                "Rispondi SOLO con JSON valido nel formato: "
+                '{"insights": ["..."]}. '
+                "Le insights devono evidenziare possibili varianti di struttura o semantica (es. campi valorizzati "
+                "solo per alcuni record), utili alla modellazione dati."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"Prompt utente generale:\n{config.user_prompt}\n\n"
+                f"Entità: {entity_name} ({entity_source})\n"
+                f"Record anonimizzati (max {len(samples)}):\n{json.dumps(samples, ensure_ascii=False)}"
+            ),
+        },
+    ]
+    payload = {
+        "model": config.model,
+        "temperature": 0,
+        "response_format": {"type": "json_object"},
+        "messages": messages,
+    }
+    response_text = caller(payload, config)
+    parsed = _extract_json_block(response_text)
+    return [str(x) for x in parsed.get("insights", []) if str(x).strip()]
