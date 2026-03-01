@@ -8,6 +8,7 @@ from datamodel_navigator.llm_guidance import (
     LLMConfig,
     _build_ssl_context,
     _default_call_llm,
+    _env_truthy,
     analyze_entity_samples,
     apply_llm_guidance,
     correct_data_model_json,
@@ -144,3 +145,20 @@ def test_build_ssl_context_uses_custom_bundle(monkeypatch) -> None:
     _build_ssl_context()
 
     assert calls == ["/tmp/company-ca.pem"]
+
+
+def test_env_truthy_recognizes_common_values(monkeypatch) -> None:
+    monkeypatch.setenv("DMN_ALLOW_INSECURE_SSL", "yes")
+    assert _env_truthy("DMN_ALLOW_INSECURE_SSL") is True
+
+
+def test_build_ssl_context_insecure_mode(monkeypatch) -> None:
+    sentinel = object()
+
+    def fake_unverified_context():
+        return sentinel
+
+    monkeypatch.setenv("DMN_ALLOW_INSECURE_SSL", "1")
+    monkeypatch.setattr("datamodel_navigator.llm_guidance.ssl._create_unverified_context", fake_unverified_context)
+
+    assert _build_ssl_context() is sentinel

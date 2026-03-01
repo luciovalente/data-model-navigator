@@ -124,6 +124,13 @@ Dove trovare il file PEM?
 - Se hai solo `.crt`/`.cer`, spesso è già PEM (testo con `-----BEGIN CERTIFICATE-----`), altrimenti va convertito.
 - macOS (Python.org): esegui lo script "Install Certificates.command" incluso nell'installazione Python per aggiornare lo store CA.
 
+Ultima risorsa (temporanea, sconsigliata in produzione):
+```bash
+export DMN_ALLOW_INSECURE_SSL=1
+dmn --phase discover
+```
+Questo disabilita la verifica TLS per le chiamate LLM. Usalo solo per test/blocco operativo e rimuovilo appena hai il certificato corretto.
+
 Se `dmn` risponde `command not found`, hai due opzioni:
 
 ```bash
